@@ -19,6 +19,19 @@ type Brief = {
   storyboard?: { hook: string; total_duration_s: number; shots: any[] };
   created_at: number;
 };
+type YouTubeVideo = {
+  videoId: string;
+  title: string;
+  description: string;
+  channelTitle: string;
+  durationSeconds: number;
+  publishedAt: string;
+  tags: string[];
+  viewCount: number | null;
+  likeCount: number | null;
+  thumbnailUrl: string;
+  isShort: boolean;
+};
 
 export default function Home() {
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -31,6 +44,27 @@ export default function Home() {
   const [duration, setDuration] = useState(20);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [ytUrl, setYtUrl] = useState("");
+  const [ytLoading, setYtLoading] = useState(false);
+  const [ytError, setYtError] = useState<string | null>(null);
+  const [ytVideo, setYtVideo] = useState<YouTubeVideo | null>(null);
+
+  async function fetchYouTube(e: React.FormEvent) {
+    e.preventDefault();
+    setYtError(null);
+    setYtVideo(null);
+    setYtLoading(true);
+    const res = await fetch("/api/youtube/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: ytUrl }),
+    });
+    setYtLoading(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setYtError(data.error ?? "failed"); return; }
+    setYtVideo(data.video);
+  }
 
   async function refresh() {
     const [cRes, pRes, bRes, uRes] = await Promise.all([
@@ -117,6 +151,59 @@ export default function Home() {
         </div>
         {error && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{error}</p>}
       </form>
+
+      <h2 style={{ marginTop: 32 }}>YouTube reference ingest</h2>
+      <p className="muted" style={{ marginTop: -8 }}>
+        Paste a YouTube Shorts or video URL — we&apos;ll pull title, duration, tags and stats via the YouTube Data API.
+        Becomes the seed for an in-session prototype (next iteration wires it into the storyboard prompt).
+      </p>
+      <form className="card" onSubmit={fetchYouTube}>
+        <div className="row" style={{ alignItems: "flex-end", gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <label className="muted">YouTube URL or video ID</label>
+            <input
+              value={ytUrl}
+              onChange={(e) => setYtUrl(e.target.value)}
+              placeholder="https://www.youtube.com/shorts/…"
+              style={{ width: "100%", marginTop: 4 }}
+            />
+          </div>
+          <button type="submit" disabled={ytLoading || !ytUrl.trim()}>
+            {ytLoading ? "Fetching…" : "Fetch reference"}
+          </button>
+        </div>
+        {ytError && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{ytError}</p>}
+      </form>
+      {ytVideo && (
+        <div className="card" style={{ marginTop: 12, display: "flex", gap: 16, alignItems: "flex-start" }}>
+          {ytVideo.thumbnailUrl && (
+            <img
+              src={ytVideo.thumbnailUrl}
+              alt=""
+              style={{ width: 160, borderRadius: 6, flexShrink: 0 }}
+            />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontWeight: 600 }}>{ytVideo.title}</p>
+            <p className="muted" style={{ margin: "4px 0" }}>
+              {ytVideo.channelTitle} · {ytVideo.durationSeconds}s
+              {ytVideo.isShort && " · SHORT"}
+              {ytVideo.viewCount !== null && ` · ${ytVideo.viewCount.toLocaleString()} views`}
+              {ytVideo.likeCount !== null && ` · ${ytVideo.likeCount.toLocaleString()} likes`}
+            </p>
+            {ytVideo.tags.length > 0 && (
+              <p className="muted" style={{ margin: "4px 0", fontSize: 12 }}>
+                Tags: {ytVideo.tags.slice(0, 8).join(", ")}
+              </p>
+            )}
+            {ytVideo.description && (
+              <p className="muted" style={{ margin: "8px 0 0", fontSize: 13, whiteSpace: "pre-wrap" }}>
+                {ytVideo.description.slice(0, 320)}{ytVideo.description.length > 320 ? "…" : ""}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <h2 style={{ marginTop: 32 }}>Recent briefs</h2>
       <div className="grid">

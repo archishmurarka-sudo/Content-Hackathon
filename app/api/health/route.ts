@@ -14,6 +14,7 @@ export async function GET() {
       GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
       GEMINI_MODEL: process.env.GEMINI_MODEL ?? null,
       HIGGSFIELD_API_KEY: Boolean(process.env.HIGGSFIELD_API_KEY),
+      YOUTUBE_API_KEY: Boolean(process.env.YOUTUBE_API_KEY),
       PERISKOPE_API_KEY: Boolean(process.env.PERISKOPE_API_KEY),
       PERISKOPE_PHONE: Boolean(process.env.PERISKOPE_PHONE),
       R2_BUCKET: process.env.R2_BUCKET ?? null,
