@@ -430,7 +430,10 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
                 shot={s}
                 frame={framesByIdx[s.idx]}
                 busy={Boolean(perShotBusy[s.idx])}
+                videoBusy={Boolean(perShotVideoBusy[s.idx])}
+                openrouterReady={Boolean(health?.env?.OPENROUTER_API_KEY)}
                 onAction={(action, extra) => shotAction(s.idx, action, extra)}
+                onRenderVideo={() => regenShotVideo(s.idx)}
               />
             ))}
           </div>
@@ -783,12 +786,18 @@ function ShotCard({
   shot,
   frame,
   busy,
+  videoBusy,
+  openrouterReady,
   onAction,
+  onRenderVideo,
 }: {
   shot: Shot;
   frame: Frame | undefined;
   busy: boolean;
+  videoBusy: boolean;
+  openrouterReady: boolean;
   onAction: (action: "regenerate" | "approve" | "unapprove", extra?: { prompt_override?: string; feedback?: string }) => void;
+  onRenderVideo: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [promptDraft, setPromptDraft] = useState(shot.image_prompt);
@@ -805,24 +814,64 @@ function ShotCard({
     status === "ready" ? "storyboard_ready" :
     status === "failed" ? "failed" : "pending";
 
+  const videoStatus = frame?.video_status ?? "idle";
+  const canRenderVideo = status === "approved" && (videoStatus === "idle" || videoStatus === "failed");
+
+  function handleRenderVideo() {
+    if (!openrouterReady) return;
+    if (!confirm(`Render Shot ${shot.idx + 1} as an 8s video via OpenRouter → Veo 3.1 Lite (~$0.40, audio on)?`)) return;
+    onRenderVideo();
+  }
+
   return (
     <div className="card">
       <div className="row" style={{ gap: 16, alignItems: "flex-start" }}>
         <div style={{ width: 220, flexShrink: 0 }}>
-          {frame?.image_url ? (
-            <img
-              src={frame.image_url}
-              alt={`Shot ${shot.idx + 1}`}
+          {/* If the per-shot clip is ready, show it INLINE here. Otherwise show the still frame. */}
+          {videoStatus === "ready" && frame?.video_url ? (
+            <video
+              src={frame.video_url}
+              controls
+              playsInline
+              poster={frame.image_url}
               style={{ width: "100%", borderRadius: 8, aspectRatio: "9/16", objectFit: "cover", background: "#000" }}
             />
+          ) : frame?.image_url ? (
+            <div style={{ position: "relative" }}>
+              <img
+                src={frame.image_url}
+                alt={`Shot ${shot.idx + 1}`}
+                style={{ width: "100%", borderRadius: 8, aspectRatio: "9/16", objectFit: "cover", background: "#000" }}
+              />
+              {videoStatus === "pending" && (
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: 8,
+                  background: "rgba(0,0,0,0.55)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#fff", fontSize: 12, fontWeight: 600,
+                }}>
+                  Rendering video…
+                </div>
+              )}
+            </div>
           ) : (
             <div style={{ width: "100%", aspectRatio: "9/16", borderRadius: 8, background: "#1a1a22", display: "flex", alignItems: "center", justifyContent: "center", color: "#666", fontSize: 12, textAlign: "center", padding: 12 }}>
               {status === "pending" ? "Generating…" : status === "failed" ? "Failed" : "No frame yet"}
             </div>
           )}
           <div style={{ marginTop: 8 }}>
-            <span className={`badge badge-${statusBadgeClass}`}>{status}</span>
+            <span className={`badge badge-${statusBadgeClass}`}>frame · {status}</span>
+            {videoStatus !== "idle" && (
+              <span
+                className={`badge badge-${videoStatus === "ready" ? "succeeded" : videoStatus === "failed" ? "failed" : "pending"}`}
+                style={{ marginLeft: 6 }}
+              >
+                video · {videoStatus}
+              </span>
+            )}
             {frame?.error && <p style={{ color: "#ff6b6b", fontSize: 11, marginTop: 6 }}>{frame.error}</p>}
+            {frame?.video_error && <p style={{ color: "#ff6b6b", fontSize: 11, marginTop: 6 }}>video: {frame.video_error}</p>}
+
             <div className="row" style={{ marginTop: 8 }}>
               {status === "ready" ? (
                 <button
@@ -836,7 +885,8 @@ function ShotCard({
                 <button
                   style={{ padding: "4px 10px", fontSize: 12 }}
                   onClick={() => onAction("unapprove")}
-                  disabled={busy}
+                  disabled={busy || videoStatus === "pending"}
+                  title={videoStatus === "pending" ? "Wait for video to finish rendering" : undefined}
                 >
                   Unapprove
                 </button>
@@ -849,6 +899,46 @@ function ShotCard({
                 {editing ? "Hide" : "Edit & regen"}
               </button>
             </div>
+
+            {/* Per-shot video render — surfaces the moment a frame is approved.
+                This is the path the user wants: approve one image → immediately
+                generate the video for it, without waiting for the whole batch. */}
+            {status === "approved" && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #23232f" }}>
+                {videoStatus === "ready" ? (
+                  <div className="row" style={{ gap: 6 }}>
+                    <a
+                      href={frame?.video_url}
+                      download={`shot_${shot.idx + 1}.mp4`}
+                      style={{ padding: "4px 10px", fontSize: 12, textDecoration: "none", color: "var(--accent)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)" }}
+                    >
+                      Download mp4
+                    </a>
+                    <button
+                      style={{ padding: "4px 10px", fontSize: 12, background: "transparent", color: "var(--text-2)", borderColor: "var(--border-strong)" }}
+                      onClick={handleRenderVideo}
+                      disabled={videoBusy || !openrouterReady}
+                      title={!openrouterReady ? "OPENROUTER_API_KEY not set on Railway" : undefined}
+                    >
+                      {videoBusy ? "Re-rendering…" : "Re-render"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    style={{ padding: "6px 12px", fontSize: 12, background: "var(--gold)", borderColor: "var(--gold)", color: "var(--accent-fg)", fontWeight: 600 }}
+                    onClick={handleRenderVideo}
+                    disabled={videoBusy || videoStatus === "pending" || !openrouterReady}
+                    title={!openrouterReady ? "OPENROUTER_API_KEY not set on Railway" : "Render this shot as an 8s video with audio via Veo 3.1 Lite"}
+                  >
+                    {videoStatus === "pending" || videoBusy
+                      ? "Rendering…"
+                      : videoStatus === "failed"
+                        ? "Retry video"
+                        : "🎬 Generate video for this shot"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
