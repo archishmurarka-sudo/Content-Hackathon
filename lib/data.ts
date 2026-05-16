@@ -210,6 +210,10 @@ export type Product = {
   one_liner: string;
   pain_anchors: string[];
   hero_image_url?: string | null;
+  // Additional product photos (lifestyle / packaging / hand shots) used as
+  // visual references in the storyboard image prompts. Hero stays the primary
+  // anchor; gallery items widen the visual vocabulary.
+  gallery_image_urls?: string[] | null;
   format?: string;                  // "Gummy", "Roll-on", "Capsule" etc.
   key_ingredients?: string[];
   delivery_tech?: string;           // e.g. "Beadlet delivery"

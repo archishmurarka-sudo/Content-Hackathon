@@ -13,6 +13,7 @@ type Product = {
   one_liner: string;
   pain_anchors: string[];
   hero_image_url?: string | null;
+  gallery_image_urls?: string[] | null;
   format?: string;
   key_ingredients?: string[];
   delivery_tech?: string;
@@ -101,7 +102,7 @@ function ProductCard({ product, briefCount, onChanged }: { product: Product; bri
         <HeroSlot product={product} onChanged={onChanged} />
 
         {/* Detail */}
-        <div style={{ padding: 22 }}>
+        <div style={{ padding: 22, display: "flex", flexDirection: "column" }}>
           <div className="row" style={{ alignItems: "center", gap: 10 }}>
             <span className="eyebrow">{product.brand}</span>
             {isUser && <span className="badge badge-storyboard_ready">user added</span>}
@@ -180,6 +181,9 @@ function ProductCard({ product, briefCount, onChanged }: { product: Product; bri
           </div>
         </div>
       </div>
+
+      {/* Gallery strip — multi-upload of supporting assets (packaging, lifestyle shots, etc.) */}
+      <GalleryStrip product={product} onChanged={onChanged} />
     </div>
   );
 }
@@ -281,6 +285,152 @@ function HeroSlot({ product, onChanged }: { product: Product; onChanged: () => v
         </div>
       )}
       <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />
+    </div>
+  );
+}
+
+function GalleryStrip({ product, onChanged }: { product: Product; onChanged: () => void }) {
+  const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busyCount, setBusyCount] = useState(0);
+  const gallery = product.gallery_image_urls ?? [];
+
+  async function uploadOne(file: File): Promise<string | null> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("prefix", `products/${product.id}/gallery`);
+    const res = await fetch("/api/uploads/image", { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(`Couldn't upload ${file.name}`, data?.error ?? "upload failed");
+      return null;
+    }
+    return data.url as string;
+  }
+
+  async function savePatch(next_urls: string[]) {
+    const res = await fetch(`/api/products/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gallery_image_urls: next_urls }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast.error("Couldn't save gallery", d?.error ?? "save failed");
+      return false;
+    }
+    return true;
+  }
+
+  async function onPickMany(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setBusyCount(files.length);
+    try {
+      const uploaded = await Promise.all(files.map((f) => uploadOne(f)));
+      const successful = uploaded.filter((u): u is string => Boolean(u));
+      if (successful.length === 0) return;
+      const next = [...gallery, ...successful];
+      const ok = await savePatch(next);
+      if (ok) {
+        toast.success(`Added ${successful.length} asset${successful.length === 1 ? "" : "s"}`, product.name);
+        onChanged();
+      }
+    } finally {
+      setBusyCount(0);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function removeAt(idx: number) {
+    if (!confirm("Remove this asset from the product gallery?")) return;
+    const next = gallery.filter((_, i) => i !== idx);
+    const ok = await savePatch(next);
+    if (ok) {
+      toast.success("Asset removed", product.name);
+      onChanged();
+    }
+  }
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", padding: "16px 22px" }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div>
+          <span className="eyebrow">Asset gallery</span>
+          <p className="muted-sm" style={{ marginTop: 2 }}>
+            {gallery.length === 0
+              ? "No supporting assets yet — upload packaging shots, lifestyle photos, hand-holds, etc."
+              : `${gallery.length} asset${gallery.length === 1 ? "" : "s"} stored. Click + to add more.`}
+          </p>
+        </div>
+        <button
+          className="btn-ghost btn-sm"
+          onClick={() => !busyCount && fileRef.current?.click()}
+          disabled={busyCount > 0}
+        >
+          <Upload size={12} /> {busyCount > 0 ? `Uploading ${busyCount}…` : "Upload assets"}
+        </button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onPickMany}
+        style={{ display: "none" }}
+      />
+      {gallery.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+            gap: 8,
+          }}
+        >
+          {gallery.map((url, i) => (
+            <div
+              key={`${url}-${i}`}
+              style={{
+                position: "relative",
+                aspectRatio: "1/1",
+                borderRadius: "var(--radius)",
+                overflow: "hidden",
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <img
+                src={url}
+                alt={`${product.name} asset ${i + 1}`}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+              <button
+                onClick={() => removeAt(i)}
+                title="Remove asset"
+                aria-label="Remove asset"
+                style={{
+                  position: "absolute",
+                  top: 4,
+                  right: 4,
+                  width: 22,
+                  height: 22,
+                  padding: 0,
+                  borderRadius: "50%",
+                  background: "rgba(11,13,12,0.78)",
+                  color: "var(--text-2)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

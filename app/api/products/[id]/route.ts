@@ -44,6 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "one_liner",
     "pain_anchors",
     "hero_image_url",
+    "gallery_image_urls",
     "format",
     "key_ingredients",
     "delivery_tech",
