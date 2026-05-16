@@ -49,7 +49,20 @@ export default function Home() {
     setUsage(uRes.ok ? await uRes.json() : null);
   }
 
-  useEffect(() => { refresh(); }, []);
+  // Poll briefs every 5s so the home grid auto-updates as new briefs/frames land.
+  // Also refresh when the tab regains focus (covers returning from /briefs/[id]).
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 5000);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
