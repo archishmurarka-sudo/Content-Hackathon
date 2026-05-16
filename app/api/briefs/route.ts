@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
   const handle = String(body.creator_handle ?? "").trim();
   const product_id = String(body.product_id ?? "ashwamag").trim();
   const target_duration_s = Number(body.target_duration_s ?? 20);
+  const funnel_raw = String(body.funnel_stage ?? "BOF").toUpperCase();
+  const funnel_stage: "BOF" | "MOF" | "TOF" =
+    funnel_raw === "MOF" || funnel_raw === "TOF" ? funnel_raw : "BOF";
   const youtube_url = typeof body.youtube_url === "string" ? body.youtube_url.trim() : "";
 
   if (!handle) return NextResponse.json({ error: "creator_handle required" }, { status: 400 });
@@ -53,6 +56,7 @@ export async function POST(req: NextRequest) {
       creator,
       product: product.name,
       target_duration_s,
+      funnel_stage,
       limit: 3,
     });
     if (prototypes.length === 0) {
@@ -64,6 +68,7 @@ export async function POST(req: NextRequest) {
       product_id,
       prototypes,
       target_duration_s,
+      funnel_stage,
       youtube_ref,
     });
     await setStoryboard(brief.id, { ...sb, brief_id: brief.id });

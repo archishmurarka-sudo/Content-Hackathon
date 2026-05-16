@@ -46,11 +46,18 @@ export async function ensureSchema(): Promise<void> {
         storyboard JSONB,
         frames JSONB,
         youtube_ref JSONB,
+        delivery JSONB,
+        final_video_url TEXT,
+        final_video_key TEXT,
         error TEXT,
         created_at BIGINT NOT NULL,
         updated_at BIGINT NOT NULL
       );
     `;
+    // Idempotent column adds for upgrading existing tables (Postgres 9.6+).
+    await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS delivery JSONB;`;
+    await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS final_video_url TEXT;`;
+    await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS final_video_key TEXT;`;
     await s`CREATE INDEX IF NOT EXISTS briefs_created_at_idx ON briefs (created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS briefs_status_idx ON briefs (status);`;
   })();

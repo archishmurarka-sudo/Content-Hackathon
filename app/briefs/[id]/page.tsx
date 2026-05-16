@@ -21,6 +21,17 @@ type Frame = {
   image_url?: string;
   prompt: string;
   error?: string;
+  video_status?: "idle" | "pending" | "ready" | "failed";
+  video_url?: string;
+  video_model?: string;
+  video_error?: string;
+};
+type Delivery = {
+  status: "queued" | "sent" | "failed";
+  channel: "whatsapp" | "email";
+  to: string;
+  sent_at?: number;
+  error?: string;
 };
 type YouTubeRef = {
   videoId: string;
@@ -49,6 +60,8 @@ type Brief = {
   };
   frames?: Frame[];
   youtube_ref?: YouTubeRef;
+  delivery?: Delivery;
+  final_video_url?: string;
 };
 
 export default function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -57,6 +70,17 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
   const [regenerating, setRegenerating] = useState(false);
   const [generatingFrames, setGeneratingFrames] = useState(false);
   const [perShotBusy, setPerShotBusy] = useState<Record<number, boolean>>({});
+  const [generatingVideos, setGeneratingVideos] = useState(false);
+  const [perShotVideoBusy, setPerShotVideoBusy] = useState<Record<number, boolean>>({});
+  const [stitching, setStitching] = useState(false);
+  const [stitchError, setStitchError] = useState<string | null>(null);
+  const [deliveryChannel, setDeliveryChannel] = useState<"email" | "whatsapp">("email");
+  const [emailTo, setEmailTo] = useState("");
+  const [postingNotes, setPostingNotes] = useState("");
+  const [phone, setPhone] = useState("");
+  const [savedPhoneLoaded, setSavedPhoneLoaded] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch(`/api/briefs/${id}`, { cache: "no-store" });
@@ -110,20 +134,97 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     load();
   }
 
+  async function generateAllVideos() {
+    const ready = (brief?.frames ?? []).filter((f) => f.status === "approved");
+    if (ready.length === 0) return;
+    const cost = (ready.length * 0.25).toFixed(2);
+    if (!confirm(`Render ${ready.length} video clip${ready.length === 1 ? "" : "s"} via fal.ai (~$${cost})?`)) return;
+    setGeneratingVideos(true);
+    await fetch(`/api/briefs/${id}/render-videos`, { method: "POST" });
+    setGeneratingVideos(false);
+    load();
+  }
+
+  async function stitchFinal() {
+    setStitchError(null);
+    setStitching(true);
+    const res = await fetch(`/api/briefs/${id}/stitch`, { method: "POST" });
+    setStitching(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setStitchError(d?.error ?? "stitch failed");
+    }
+    load();
+  }
+
+  async function sendByEmail() {
+    setSendError(null);
+    if (!emailTo.trim()) { setSendError("Email required"); return; }
+    setSending(true);
+    const res = await fetch(`/api/briefs/${id}/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: emailTo.trim(), posting_notes: postingNotes.trim() || undefined }),
+    });
+    setSending(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) setSendError(data?.error ?? "send failed");
+    load();
+  }
+
+  async function regenShotVideo(idx: number) {
+    setPerShotVideoBusy((b) => ({ ...b, [idx]: true }));
+    await fetch(`/api/briefs/${id}/videos/${idx}`, { method: "POST" });
+    setPerShotVideoBusy((b) => ({ ...b, [idx]: false }));
+    load();
+  }
+
+  // Load saved phone for this creator once we know the handle.
+  useEffect(() => {
+    if (!brief || savedPhoneLoaded) return;
+    fetch(`/api/creators/${brief.creator_handle}/contact`).then(async (r) => {
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data?.phone) setPhone(data.phone);
+      setSavedPhoneLoaded(true);
+    });
+  }, [brief?.creator_handle, savedPhoneLoaded]);
+
+  async function sendToWhatsApp() {
+    setSendError(null);
+    if (!phone.trim()) { setSendError("Phone required"); return; }
+    setSending(true);
+    const res = await fetch(`/api/briefs/${id}/deliver`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: phone.trim(), save_phone: true }),
+    });
+    setSending(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) setSendError(data?.error ?? "send failed");
+    load();
+  }
+
   if (!brief) return <div className="container"><p className="muted">Loading…</p></div>;
 
   const framesByIdx: Record<number, Frame> = {};
   (brief.frames ?? []).forEach((f) => (framesByIdx[f.shot_idx] = f));
   const allApproved = brief.frames && brief.frames.length > 0 && brief.frames.every((f) => f.status === "approved");
 
-  // Pipeline stage index: 0=storyboard, 1=frames generating, 2=frames ready, 3=approved, 4=delivered
+  // Pipeline stage index: 0=storyboard, 1=frames generating, 2=frames ready, 3=video render, 4=delivered
   const stageIdx = (() => {
     if (brief.status === "delivered") return 4;
-    if (brief.status === "frames_approved" || brief.status === "videos_pending") return 3;
+    if (brief.status === "videos_ready") return 4;
+    if (brief.status === "videos_pending" || brief.status === "frames_approved") return 3;
     if (brief.status === "frames_ready") return 2;
     if (brief.status === "frames_pending") return 1;
     return 0;
   })();
+
+  const videosReadyCount = (brief.frames ?? []).filter((f) => f.video_status === "ready").length;
+  const videosPendingCount = (brief.frames ?? []).filter((f) => f.video_status === "pending").length;
+  const approvedCount = (brief.frames ?? []).filter((f) => f.status === "approved").length;
+  const allVideosReady = approvedCount > 0 && videosReadyCount === approvedCount;
 
   return (
     <div className="container">
@@ -155,8 +256,8 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
           { label: "Storyboard", sub: "Gemini script" },
           { label: "Frames", sub: "Nano Banana" },
           { label: "Frames ready", sub: "Review + approve" },
-          { label: "Video render", sub: "Higgsfield (queued)" },
-          { label: "Delivered", sub: "Periskope (queued)" },
+          { label: "Video render", sub: "fal.ai · Kling 2.1" },
+          { label: "Delivered", sub: "Email · WhatsApp" },
         ].map((step, i) => (
           <div key={i} className={`pipeline-step ${i < stageIdx ? "done" : i === stageIdx ? "active" : ""}`}>
             <strong>{step.label}</strong>
@@ -248,13 +349,190 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
 
           {allApproved && (
             <div className="card" style={{ marginTop: 20, borderColor: "var(--accent)", background: "var(--accent-soft)" }}>
-              <div className="eyebrow" style={{ color: "var(--accent)" }}>All frames approved</div>
-              <p style={{ margin: "6px 0 0", color: "var(--text-2)" }}>
-                Ready for video render → Periskope delivery (next stage).
-              </p>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div className="eyebrow" style={{ color: "var(--accent)" }}>All frames approved</div>
+                  <p style={{ margin: "6px 0 0", color: "var(--text-2)" }}>
+                    {videosReadyCount === 0
+                      ? `Ready to render ${approvedCount} clip${approvedCount === 1 ? "" : "s"} via fal.ai (Kling 2.1).`
+                      : videosReadyCount < approvedCount
+                        ? `${videosReadyCount}/${approvedCount} clips rendered${videosPendingCount ? ` · ${videosPendingCount} in flight` : ""}.`
+                        : `All ${videosReadyCount} clips rendered. Send to creator below.`}
+                  </p>
+                </div>
+                <button onClick={generateAllVideos} disabled={generatingVideos || videosPendingCount > 0}>
+                  {generatingVideos || videosPendingCount > 0
+                    ? `Rendering${videosPendingCount ? ` (${videosPendingCount} left)` : "…"}`
+                    : videosReadyCount === 0
+                      ? "Generate videos"
+                      : videosReadyCount < approvedCount
+                        ? "Render remaining"
+                        : "Re-render all"}
+                </button>
+              </div>
             </div>
           )}
+
+          {(brief.frames ?? []).some((f) => f.video_status && f.video_status !== "idle") && (
+            <section style={{ marginTop: 32 }}>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+                <div>
+                  <span className="eyebrow">Rendered clips</span>
+                  <h2 style={{ marginTop: 4 }}>{videosReadyCount}/{approvedCount} ready</h2>
+                </div>
+              </div>
+              <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", marginTop: 12, gap: 12 }}>
+                {(brief.frames ?? [])
+                  .filter((f) => f.video_status && f.video_status !== "idle")
+                  .sort((a, b) => a.shot_idx - b.shot_idx)
+                  .map((f) => (
+                    <VideoTile
+                      key={f.shot_idx}
+                      frame={f}
+                      busy={Boolean(perShotVideoBusy[f.shot_idx])}
+                      onRegen={() => regenShotVideo(f.shot_idx)}
+                    />
+                  ))}
+              </div>
+            </section>
+          )}
+
+          {allVideosReady && (
+            <>
+              <div className="card" style={{ marginTop: 24 }}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <span className="eyebrow">Final cut</span>
+                    <h2 style={{ marginTop: 4 }}>Stitch into one video</h2>
+                    <p className="muted-sm" style={{ marginTop: 6, maxWidth: 540 }}>
+                      Concats all {videosReadyCount} clips into a single 9:16 mp4 with overlay text burned in (ffmpeg). Stored in R2 alongside the source clips.
+                    </p>
+                  </div>
+                  <button onClick={stitchFinal} disabled={stitching}>
+                    {stitching ? "Stitching…" : brief.final_video_url ? "Re-stitch" : "Stitch final video"}
+                  </button>
+                </div>
+                {brief.final_video_url && (
+                  <div style={{ marginTop: 14, display: "flex", gap: 14, alignItems: "flex-start" }}>
+                    <video src={brief.final_video_url} controls playsInline style={{ width: 240, aspectRatio: "9/16", borderRadius: 8, background: "#000" }} />
+                    <div className="muted-sm" style={{ flex: 1 }}>
+                      <div>Final cut ready — preview at left.</div>
+                      <a href={brief.final_video_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8 }}>
+                        Download mp4 →
+                      </a>
+                    </div>
+                  </div>
+                )}
+                {stitchError && <p style={{ color: "var(--danger)", marginTop: 10, fontSize: 13 }}>{stitchError}</p>}
+              </div>
+
+              {brief.final_video_url && (
+                <div className="card" style={{ marginTop: 20 }}>
+                  <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <span className="eyebrow">Auto-send to creator</span>
+                      <h2 style={{ marginTop: 4 }}>Deliver final cut</h2>
+                      <p className="muted-sm" style={{ marginTop: 6, maxWidth: 540 }}>
+                        Pick channel — email is fastest to set up (Resend), WhatsApp uses Periskope.
+                      </p>
+                    </div>
+                    {brief.delivery?.status === "sent" && (
+                      <span className="badge badge-succeeded">
+                        Sent via {brief.delivery.channel}{brief.delivery.sent_at ? ` · ${new Date(brief.delivery.sent_at).toLocaleTimeString()}` : ""}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="row" style={{ marginTop: 14, gap: 8 }}>
+                    <button
+                      className={deliveryChannel === "email" ? "" : "btn-ghost"}
+                      onClick={() => setDeliveryChannel("email")}
+                      style={{ padding: "6px 14px", fontSize: 13 }}
+                    >Email (Resend)</button>
+                    <button
+                      className={deliveryChannel === "whatsapp" ? "" : "btn-ghost"}
+                      onClick={() => setDeliveryChannel("whatsapp")}
+                      style={{ padding: "6px 14px", fontSize: 13 }}
+                    >WhatsApp (Periskope)</button>
+                  </div>
+
+                  {deliveryChannel === "email" ? (
+                    <>
+                      <div className="row" style={{ marginTop: 12, gap: 10, alignItems: "flex-end" }}>
+                        <div style={{ flex: 1, minWidth: 220 }}>
+                          <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>Creator email</label>
+                          <input value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="creator@example.com" style={{ width: "100%" }} />
+                        </div>
+                        <button onClick={sendByEmail} disabled={sending || !emailTo.trim()}>
+                          {sending ? "Sending…" : brief.delivery?.channel === "email" && brief.delivery.status === "sent" ? "Re-send email" : "Send email"}
+                        </button>
+                      </div>
+                      <div style={{ marginTop: 10 }}>
+                        <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>Posting notes (optional)</label>
+                        <textarea value={postingNotes} onChange={(e) => setPostingNotes(e.target.value)} rows={2} placeholder="e.g. post Friday morning, use #magashwa caption…" style={{ width: "100%", fontSize: 13 }} />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="row" style={{ marginTop: 12, gap: 10, alignItems: "flex-end" }}>
+                      <div style={{ flex: 1, minWidth: 220 }}>
+                        <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>Creator phone (country code, no +)</label>
+                        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="14155550123" style={{ width: "100%" }} />
+                      </div>
+                      <button onClick={sendToWhatsApp} disabled={sending || !phone.trim()}>
+                        {sending ? "Sending…" : brief.delivery?.channel === "whatsapp" && brief.delivery.status === "sent" ? "Re-send WhatsApp" : "Send to WhatsApp"}
+                      </button>
+                    </div>
+                  )}
+
+                  {sendError && <p style={{ color: "var(--danger)", marginTop: 10, fontSize: 13 }}>{sendError}</p>}
+                  {brief.delivery?.status === "failed" && brief.delivery.error && (
+                    <p style={{ color: "var(--danger)", marginTop: 10, fontSize: 13 }}>Last attempt: {brief.delivery.error}</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </>
+      )}
+    </div>
+  );
+}
+
+function VideoTile({ frame, busy, onRegen }: { frame: Frame; busy: boolean; onRegen: () => void }) {
+  const status = frame.video_status ?? "idle";
+  return (
+    <div className="card" style={{ padding: 10 }}>
+      <div style={{ position: "relative", aspectRatio: "9/16", borderRadius: 6, overflow: "hidden", background: "#000" }}>
+        {frame.video_url ? (
+          <video src={frame.video_url} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : frame.image_url ? (
+          <img src={frame.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.4 }} />
+        ) : null}
+        {status === "pending" && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>
+            Rendering…
+          </div>
+        )}
+      </div>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>Shot {frame.shot_idx + 1}</div>
+          <span className={`badge badge-${status === "ready" ? "succeeded" : status === "failed" ? "failed" : "storyboard_ready"}`}>{status}</span>
+        </div>
+        <button
+          className="btn-ghost btn-sm"
+          onClick={onRegen}
+          disabled={busy || status === "pending"}
+          style={{ fontSize: 11 }}
+        >
+          {busy ? "…" : status === "failed" ? "Retry" : "Regen"}
+        </button>
+      </div>
+      {frame.video_error && (
+        <p style={{ color: "#ff6b6b", fontSize: 11, marginTop: 6 }}>{frame.video_error}</p>
+      )}
+      {frame.video_model && status === "ready" && (
+        <p className="muted-sm" style={{ fontSize: 10, marginTop: 4 }}>{frame.video_model.split("/").slice(-2).join("/")}</p>
       )}
     </div>
   );

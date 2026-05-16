@@ -31,13 +31,35 @@ import { resolveTextModel } from "./models";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
+export type FunnelStage = "BOF" | "MOF" | "TOF";
+
+const FUNNEL_INTENT: Record<FunnelStage, { name: string; intent: string; cta: string }> = {
+  BOF: {
+    name: "BOTTOM-OF-FUNNEL",
+    intent: "Direct selling. Product visible by 5s. Hard CTA with urgency. Goal: buy now.",
+    cta: "Final shot must be a hard, time-boxed CTA (e.g. 'Tap the orange cart, deal ends tonight').",
+  },
+  MOF: {
+    name: "MIDDLE-OF-FUNNEL",
+    intent: "Consideration / education. Build trust with mechanism, proof, or comparison. Product is shown but the goal is click-through, not buy-now.",
+    cta: "Final shot is a soft CTA (e.g. 'See why I switched — link in bio'). No urgency, no price talk.",
+  },
+  TOF: {
+    name: "TOP-OF-FUNNEL",
+    intent: "Pure awareness / retention. Hook-heavy, story-driven. NO product pitch. NO CTA. The product appears at most as a subtle prop.",
+    cta: "Final shot is a story payoff or a question that invites comments — NOT a CTA, NOT a price mention.",
+  },
+};
+
 function buildPrompt(
   creator: Creator,
   productLine: string,
   prototypes: Prototype[],
   target_s: number,
+  funnel_stage: FunnelStage,
   youtubeRef?: YouTubeVideo,
 ) {
+  const funnel = FUNNEL_INTENT[funnel_stage];
   const protoSummary = prototypes
     .map(
       (p) => `
@@ -52,7 +74,10 @@ ${p.shots
     )
     .join("\n\n");
 
-  return `You are a TikTok Shop short-form video director for Mosaic Wellness. Generate a ${target_s}-second BOTTOM-OF-FUNNEL video storyboard pegged to one specific creator's voice and visual style.
+  return `You are a TikTok Shop short-form video director for Mosaic Wellness. Generate a ${target_s}-second ${funnel.name} video storyboard pegged to one specific creator's voice and visual style.
+
+FUNNEL INTENT
+${funnel.intent}
 
 CREATOR
 @${creator.handle} — archetype: ${creator.archetype} | top pain: ${creator.top_pain} | energy: ${creator.energy_rating ?? "?"}/10 | Kalo GMV: ${
@@ -83,13 +108,13 @@ Description: ${(youtubeRef.description ?? "").slice(0, 400)}`
 REQUIREMENTS
 - Total duration: ${target_s} seconds (±2s).
 - 4 to 6 shots.
-- BOF intent: direct selling, product visible by 5s, hard CTA, urgency.
+- ${funnel.cta}
 - Speech matches THIS creator's voice (energy ${creator.energy_rating ?? 7}/10, archetype ${creator.archetype}).
 - Each shot needs: speech (≤25 words), speech_tone, visual description, on-screen overlay text, product_action, transition.
 - For each shot ALSO write:
   - image_prompt: a vivid 1–2 sentence description for an AI image model to render the opening frame (lighting, framing, color, props, person POV).
   - video_prompt: a 1–2 sentence motion description for an AI video model (what moves, camera, energy).
-- Hook in first 2 seconds. Final shot = CTA + urgency.
+- Hook in first 2 seconds.
 
 NARRATIVE CONTINUITY (adapted from StoryGen-Atelier's storyboard prompt — Apache-2.0)
 1. Continuous Story Arc — shots form a single, unbroken chronological narrative. No disconnected scenes.
@@ -129,6 +154,7 @@ export async function generateStoryboard(opts: {
   product_id: string;
   prototypes: Prototype[];
   target_duration_s: number;
+  funnel_stage?: FunnelStage;
   youtube_ref?: YouTubeVideo;
 }): Promise<Omit<Storyboard, "brief_id">> {
   const key = process.env.GEMINI_API_KEY;
@@ -139,6 +165,7 @@ export async function generateStoryboard(opts: {
     opts.product_line,
     opts.prototypes,
     opts.target_duration_s,
+    opts.funnel_stage ?? "BOF",
     opts.youtube_ref,
   );
 

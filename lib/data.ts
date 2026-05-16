@@ -42,6 +42,7 @@ export type Prototype = {
 
 const g = globalThis as unknown as {
   __creators?: Creator[];
+  __creators_added?: Map<string, Creator>;
   __prototypes?: Prototype[];
 };
 
@@ -52,7 +53,16 @@ function load<T>(file: string): T {
 
 export function getCreators(): Creator[] {
   if (!g.__creators) g.__creators = load<Creator[]>("creators.json");
-  return g.__creators;
+  const added = g.__creators_added ? Array.from(g.__creators_added.values()) : [];
+  // Runtime-added creators surface first so newly-scraped TikTok creators are
+  // visible immediately. In-memory only — survives the process, not redeploys.
+  return [...added, ...g.__creators];
+}
+
+export function addCreator(c: Creator): Creator {
+  if (!g.__creators_added) g.__creators_added = new Map();
+  g.__creators_added.set(c.handle.toLowerCase(), c);
+  return c;
 }
 
 export function getPrototypes(): Prototype[] {
@@ -65,15 +75,17 @@ export function findCreator(handle: string): Creator | undefined {
   return getCreators().find((c) => c.handle.toLowerCase() === norm);
 }
 
-// Score a prototype's fit for a target creator + product + duration.
+// Score a prototype's fit for a target creator + product + duration + funnel stage.
 // Higher = better fit. Used to pick the top N templates the LLM mimics.
 export function rankPrototypes(opts: {
   creator: Creator;
   product: string;
   target_duration_s: number;
+  funnel_stage?: "BOF" | "MOF" | "TOF";
   limit?: number;
 }): Prototype[] {
   const { creator, product, target_duration_s } = opts;
+  const funnel_stage = opts.funnel_stage ?? "BOF";
   const limit = opts.limit ?? 3;
   const productNorm = product.toLowerCase();
 
@@ -95,8 +107,8 @@ export function rankPrototypes(opts: {
       let score = 0;
       // Product match — heavy bias
       if (p.product && p.product.toLowerCase().includes(productNorm)) score += 50;
-      // BOF preferred for selling
-      if (p.funnel_stage === "BOF") score += 20;
+      // Funnel-stage match — heavy bias so the prompt mimics the right intent.
+      if (p.funnel_stage === funnel_stage) score += 20;
       // Duration proximity (closer = better)
       if (p.duration_seconds > 0) {
         const diff = Math.abs(p.duration_seconds - target_duration_s);

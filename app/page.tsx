@@ -10,9 +10,16 @@ type Creator = {
   kalo_gmv: number | null;
   top_pain: string;
   energy_rating: number | null;
+  dossier_excerpt?: string | null;
 };
 type Product = { id: string; name: string; brand: string; one_liner: string };
-type BriefFrame = { shot_idx: number; status: string; image_url?: string };
+type BriefFrame = {
+  shot_idx: number;
+  status: string;
+  image_url?: string;
+  video_status?: "idle" | "pending" | "ready" | "failed";
+  video_url?: string;
+};
 type Brief = {
   id: string;
   creator_handle: string;
@@ -21,6 +28,7 @@ type Brief = {
   status: string;
   storyboard?: { hook: string; cta?: string; total_duration_s: number; shots: any[] };
   frames?: BriefFrame[];
+  delivery?: { status: "queued" | "sent" | "failed"; to: string; sent_at?: number };
   error?: string;
   created_at: number;
 };
@@ -33,8 +41,33 @@ export default function Home() {
   const [handle, setHandle] = useState("");
   const [productId, setProductId] = useState("ashwamag");
   const [duration, setDuration] = useState(20);
+  const [funnelStage, setFunnelStage] = useState<"BOF" | "MOF" | "TOF">("BOF");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // TikTok creator scrape
+  const [tiktokInput, setTiktokInput] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
+  const [scrapedCreator, setScrapedCreator] = useState<Creator | null>(null);
+
+  async function scrapeTikTok(e: React.FormEvent) {
+    e.preventDefault();
+    setScrapeError(null);
+    setScrapedCreator(null);
+    setScraping(true);
+    const res = await fetch("/api/creators/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tiktok: tiktokInput }),
+    });
+    setScraping(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setScrapeError(data.error ?? "scrape failed"); return; }
+    setScrapedCreator(data.creator);
+    setHandle(data.creator?.handle ?? "");
+    refresh();
+  }
 
   async function refresh() {
     const [cRes, pRes, bRes] = await Promise.all([
@@ -67,7 +100,7 @@ export default function Home() {
     const res = await fetch("/api/briefs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ creator_handle: handle, product_id: productId, target_duration_s: duration }),
+      body: JSON.stringify({ creator_handle: handle, product_id: productId, target_duration_s: duration, funnel_stage: funnelStage }),
     });
     setSubmitting(false);
     const data = await res.json().catch(() => ({}));
@@ -81,6 +114,7 @@ export default function Home() {
   const deliveredToday = briefs.filter((b) => b.status === "delivered" && Date.now() - b.created_at < 86_400_000).length;
   const inFlight = briefs.filter((b) => !["delivered", "failed"].includes(b.status)).length;
   const totalApproved = briefs.reduce((sum, b) => sum + (b.frames ?? []).filter((f) => f.status === "approved").length, 0);
+  const totalClipsReady = briefs.reduce((sum, b) => sum + (b.frames ?? []).filter((f) => f.video_status === "ready").length, 0);
 
   return (
     <div className="container">
@@ -102,8 +136,8 @@ export default function Home() {
       <div className="grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 28 }}>
         <Kpi icon={<Sparkles size={14} />} label="Creators in catalog" value={creators.length.toString()} sub={`$${(totalGmv / 1_000_000).toFixed(1)}M tracked GMV`} />
         <Kpi icon={<ImageIcon size={14} />} label="Briefs in flight" value={inFlight.toString()} sub={`${briefs.length} total`} />
-        <Kpi icon={<TrendingUp size={14} />} label="Approved frames" value={totalApproved.toString()} sub="across all briefs" />
-        <Kpi icon={<Send size={14} />} label="Delivered today" value={deliveredToday.toString()} sub="via WhatsApp (pending)" />
+        <Kpi icon={<TrendingUp size={14} />} label="Clips rendered" value={totalClipsReady.toString()} sub={`${totalApproved} frames approved`} />
+        <Kpi icon={<Send size={14} />} label="Delivered today" value={deliveredToday.toString()} sub="via Periskope WhatsApp" />
       </div>
 
       {/* New brief panel */}
@@ -147,8 +181,72 @@ export default function Home() {
               {submitting ? "Generating…" : <>Generate <ArrowRight size={14} /></>}
             </button>
           </div>
+          <div className="row" style={{ marginTop: 14, gap: 8, alignItems: "center" }}>
+            <span className="muted-sm" style={{ marginRight: 4 }}>Funnel stage:</span>
+            {(["BOF", "MOF", "TOF"] as const).map((stage) => (
+              <button
+                key={stage}
+                type="button"
+                onClick={() => setFunnelStage(stage)}
+                className={funnelStage === stage ? "" : "btn-ghost btn-sm"}
+                style={{
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  border: funnelStage === stage ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: funnelStage === stage ? "var(--accent)" : "transparent",
+                  color: funnelStage === stage ? "white" : "var(--muted)",
+                  borderRadius: 6,
+                }}
+              >
+                {stage === "BOF" ? "Bottom · hard sell" : stage === "MOF" ? "Middle · consideration" : "Top · awareness"}
+              </button>
+            ))}
+          </div>
           {error && <p style={{ color: "var(--danger)", marginTop: 12, fontSize: 13 }}>{error}</p>}
         </form>
+      </div>
+
+      {/* Add creator from TikTok */}
+      <div className="card" style={{ marginBottom: 28 }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div>
+            <span className="eyebrow">Onboard</span>
+            <h2 style={{ marginTop: 4 }}>Add a new creator from TikTok</h2>
+          </div>
+          <span className="muted-sm">Apify scrape · Gemini dossier synthesis</span>
+        </div>
+        <form onSubmit={scrapeTikTok}>
+          <div className="row" style={{ alignItems: "flex-end", gap: 14 }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>TikTok handle or profile URL</label>
+              <input
+                value={tiktokInput}
+                onChange={(e) => setTiktokInput(e.target.value)}
+                placeholder="@rphreviews or https://www.tiktok.com/@rphreviews"
+                style={{ width: "100%" }}
+              />
+            </div>
+            <button type="submit" disabled={scraping || !tiktokInput.trim()}>
+              {scraping ? "Scraping…" : <>Pull profile <ArrowRight size={14} /></>}
+            </button>
+          </div>
+          {scrapeError && <p style={{ color: "var(--danger)", marginTop: 12, fontSize: 13 }}>{scrapeError}</p>}
+        </form>
+        {scrapedCreator && (
+          <div className="card" style={{ marginTop: 14, background: "rgba(0,0,0,0.02)" }}>
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+              <strong>@{scrapedCreator.handle}</strong>
+              <span className="muted-sm">{scrapedCreator.archetype} · energy {scrapedCreator.energy_rating ?? "—"}/10</span>
+            </div>
+            <p className="muted-sm" style={{ marginTop: 6 }}>Top pain: {scrapedCreator.top_pain}</p>
+            {scrapedCreator.dossier_excerpt && (
+              <p style={{ marginTop: 8, fontSize: 13 }}>{scrapedCreator.dossier_excerpt}</p>
+            )}
+            <p className="muted-sm" style={{ marginTop: 8, fontSize: 12 }}>
+              Handle copied into the brief form above — pick a product and click Generate.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Two-column: Recent briefs + Top creators */}
@@ -234,6 +332,8 @@ function Kpi({ icon, label, value, sub }: { icon: React.ReactNode; label: string
 function BriefRow({ brief }: { brief: Brief }) {
   const readyFrames = (brief.frames ?? []).filter((f) => f.image_url);
   const approved = (brief.frames ?? []).filter((f) => f.status === "approved").length;
+  const clipsReady = (brief.frames ?? []).filter((f) => f.video_status === "ready").length;
+  const clipsPending = (brief.frames ?? []).filter((f) => f.video_status === "pending").length;
   return (
     <Link href={`/briefs/${brief.id}`} style={{ textDecoration: "none", color: "inherit" }}>
       <div className="card card-hover" style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 16, alignItems: "center" }}>
@@ -252,6 +352,7 @@ function BriefRow({ brief }: { brief: Brief }) {
             <span style={{ fontWeight: 600 }}>@{brief.creator_handle}</span>
             <span className="muted-sm">{brief.product_id} · {brief.target_duration_s}s</span>
             <span className={`badge badge-${brief.status}`}>{brief.status.replace(/_/g, " ")}</span>
+            {brief.delivery?.status === "sent" && <span className="badge badge-succeeded">sent</span>}
           </div>
           {brief.storyboard?.hook && (
             <div className="muted" style={{ fontStyle: "italic", marginTop: 4, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -261,6 +362,7 @@ function BriefRow({ brief }: { brief: Brief }) {
           <div className="muted-sm" style={{ marginTop: 4 }}>
             {brief.storyboard ? `${brief.storyboard.shots.length} shots · ${brief.storyboard.total_duration_s}s` : "drafting…"}
             {brief.frames && brief.frames.length > 0 && ` · ${readyFrames.length}/${brief.frames.length} frames · ${approved} approved`}
+            {(clipsReady > 0 || clipsPending > 0) && ` · ${clipsReady}/${approved} clips${clipsPending ? ` (${clipsPending} rendering)` : ""}`}
           </div>
         </div>
         <div className="muted-sm" style={{ textAlign: "right", whiteSpace: "nowrap" }}>

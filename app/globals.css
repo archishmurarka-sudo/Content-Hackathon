@@ -185,6 +185,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 
 .badge-storyboard_ready,
 .badge-frames_ready,
+.badge-videos_ready,
 .badge-ready,
 .badge-succeeded { background: var(--accent-soft); color: var(--accent); border-color: rgba(124,180,124,.3); }
 

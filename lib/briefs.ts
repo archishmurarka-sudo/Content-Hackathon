@@ -12,10 +12,12 @@ export type BriefStatus =
   | "frames_ready"
   | "frames_approved"
   | "videos_pending"
+  | "videos_ready"
   | "delivered"
   | "failed";
 
 export type FrameStatus = "pending" | "ready" | "approved" | "failed";
+export type VideoStatus = "idle" | "pending" | "ready" | "failed";
 
 export type Frame = {
   shot_idx: number;
@@ -24,7 +26,25 @@ export type Frame = {
   image_key?: string;
   prompt: string;
   error?: string;
+  // Video clip for this shot (image-to-video render).
+  video_status?: VideoStatus;
+  video_url?: string;
+  video_key?: string;
+  video_model?: string;
+  video_error?: string;
   updated_at: number;
+};
+
+export type DeliveryStatus = "queued" | "sent" | "failed";
+export type DeliveryChannel = "email" | "whatsapp";
+export type Delivery = {
+  status: DeliveryStatus;
+  channel: DeliveryChannel;
+  to: string;
+  message_id?: string;
+  subject?: string;
+  error?: string;
+  sent_at?: number;
 };
 
 export type Brief = {
@@ -36,6 +56,9 @@ export type Brief = {
   storyboard?: Storyboard;
   frames?: Frame[];
   youtube_ref?: YouTubeVideo;
+  delivery?: Delivery;
+  final_video_url?: string;
+  final_video_key?: string;
   error?: string;
   created_at: number;
   updated_at: number;
@@ -53,6 +76,15 @@ function uid() {
 // --- generic helpers ---
 function rollupStatus(frames: Frame[] | undefined, currentStatus: BriefStatus): BriefStatus {
   if (!frames || frames.length === 0) return currentStatus;
+  // Video stages take precedence once the user starts rendering.
+  const anyVideoStarted = frames.some((f) => f.video_status && f.video_status !== "idle");
+  if (anyVideoStarted) {
+    if (frames.every((f) => f.video_status === "ready")) {
+      // Stay in "delivered" once we've delivered; otherwise mark videos_ready.
+      return currentStatus === "delivered" ? "delivered" : "videos_ready";
+    }
+    if (frames.some((f) => f.video_status === "pending")) return "videos_pending";
+  }
   if (frames.every((f) => f.status === "approved")) return "frames_approved";
   if (frames.every((f) => f.status === "ready" || f.status === "approved")) return "frames_ready";
   if (frames.some((f) => f.status === "pending")) return "frames_pending";
@@ -64,11 +96,12 @@ async function dbInsert(brief: Brief): Promise<Brief> {
   await ensureSchema();
   const s = sql();
   await s`
-    INSERT INTO briefs (id, creator_handle, product_id, target_duration_s, status, storyboard, frames, youtube_ref, error, created_at, updated_at)
+    INSERT INTO briefs (id, creator_handle, product_id, target_duration_s, status, storyboard, frames, youtube_ref, delivery, error, created_at, updated_at)
     VALUES (${brief.id}, ${brief.creator_handle}, ${brief.product_id}, ${brief.target_duration_s}, ${brief.status},
             ${brief.storyboard ? s.json(brief.storyboard) : null},
             ${brief.frames ? s.json(brief.frames) : null},
             ${brief.youtube_ref ? s.json(brief.youtube_ref) : null},
+            ${brief.delivery ? s.json(brief.delivery) : null},
             ${brief.error ?? null}, ${brief.created_at}, ${brief.updated_at})
   `;
   return brief;
@@ -115,6 +148,9 @@ async function dbUpdate(id: string, patch: Partial<Brief>): Promise<Brief | unde
       storyboard = ${merged.storyboard ? s.json(merged.storyboard) : null},
       frames = ${merged.frames ? s.json(merged.frames) : null},
       youtube_ref = ${merged.youtube_ref ? s.json(merged.youtube_ref) : null},
+      delivery = ${merged.delivery ? s.json(merged.delivery) : null},
+      final_video_url = ${merged.final_video_url ?? null},
+      final_video_key = ${merged.final_video_key ?? null},
       error = ${merged.error ?? null},
       updated_at = ${merged.updated_at}
     WHERE id = ${id}
@@ -132,6 +168,9 @@ function rowToBrief(r: any): Brief {
     storyboard: r.storyboard ?? undefined,
     frames: r.frames ?? undefined,
     youtube_ref: r.youtube_ref ?? undefined,
+    delivery: r.delivery ?? undefined,
+    final_video_url: r.final_video_url ?? undefined,
+    final_video_key: r.final_video_key ?? undefined,
     error: r.error ?? undefined,
     created_at: Number(r.created_at),
     updated_at: Number(r.updated_at),
@@ -252,6 +291,33 @@ export async function setFrame(id: string, shot_idx: number, patch: Partial<Fram
   if (i < 0) return;
   b.frames[i] = { ...b.frames[i], ...patch, updated_at: Date.now() };
   b.status = rollupStatus(b.frames, b.status);
+  b.updated_at = Date.now();
+  memStore.set(id, b);
+}
+
+export async function setDelivery(id: string, delivery: Delivery): Promise<void> {
+  const status: BriefStatus = delivery.status === "sent" ? "delivered" : (await getBrief(id))?.status ?? "videos_ready";
+  if (hasDb()) {
+    await dbUpdate(id, { delivery, status });
+    return;
+  }
+  const b = memStore.get(id);
+  if (!b) return;
+  b.delivery = delivery;
+  b.status = status;
+  b.updated_at = Date.now();
+  memStore.set(id, b);
+}
+
+export async function setFinalVideo(id: string, final_video_url: string, final_video_key: string): Promise<void> {
+  if (hasDb()) {
+    await dbUpdate(id, { final_video_url, final_video_key });
+    return;
+  }
+  const b = memStore.get(id);
+  if (!b) return;
+  b.final_video_url = final_video_url;
+  b.final_video_key = final_video_key;
   b.updated_at = Date.now();
   memStore.set(id, b);
 }
