@@ -194,9 +194,9 @@ function buildBody(model: string, o: VideoGenContext) {
   };
 }
 
-function clampDuration(s: number): number {
-  // Veo 3.1 Lite supports 4 / 6 / 8 second clips.
-  if (s <= 4) return 4;
-  if (s <= 6) return 6;
+function clampDuration(_s: number): number {
+  // Operator constraint (BOF template): always render the maximum 8s clip
+  // regardless of what the storyboard requested. The locked 2-shot × 8s
+  // = 16s stitched ad is what TikTok Shop performance is tuned for.
   return 8;
 }
