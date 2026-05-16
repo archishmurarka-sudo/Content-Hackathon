@@ -3,6 +3,15 @@ import path from "node:path";
 import { scorePrototypeVirality } from "./virality";
 import { hasDb, sql, ensureSchema } from "./db";
 
+export type CreatorRecentVideo = {
+  web_video_url: string | null;
+  cover_url: string | null;
+  duration_s: number | null;
+  like_count: number | null;
+  play_count: number | null;
+  caption: string | null;
+};
+
 export type Creator = {
   handle: string;
   archetype: string;
@@ -12,6 +21,31 @@ export type Creator = {
   energy_rating: number | null;
   dossier_excerpt: string | null;
   has_dossier: boolean;
+  // Populated for creators onboarded via the TikTok-scrape flow.
+  // Image URLs are R2-mirrored so they survive past TikTok's signed-URL expiry.
+  avatar_url?: string | null;
+  bio?: string | null;
+  followers?: number | null;
+  source?: "catalog" | "tiktok_scrape";
+  recent_videos?: CreatorRecentVideo[];
+  // Persona — observed visual + speech attributes used so generated videos
+  // featuring this creator stay visually consistent. Inferred via Gemini
+  // multimodal on the avatar image + recent post captions.
+  persona?: {
+    gender_presentation: "male" | "female" | "non_binary" | "unclear";
+    apparent_ethnicity:
+      | "white"
+      | "black"
+      | "east_asian"
+      | "south_asian"
+      | "hispanic_latino"
+      | "middle_eastern"
+      | "mixed"
+      | "unclear";
+    apparent_age_range: string; // e.g. "20s", "30s", "40s+"
+    speech_style: string; // 1 sentence on cadence / tone / vocabulary
+    appearance_description: string; // 2 sentences: build, hair, dress style, distinctive features
+  };
 };
 
 export type Shot = {

@@ -13,6 +13,25 @@ type Creator = {
   top_pain: string;
   energy_rating: number | null;
   dossier_excerpt?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  followers?: number | null;
+  source?: "catalog" | "tiktok_scrape";
+  recent_videos?: {
+    web_video_url: string | null;
+    cover_url: string | null;
+    duration_s: number | null;
+    like_count: number | null;
+    play_count: number | null;
+    caption: string | null;
+  }[];
+  persona?: {
+    gender_presentation: string;
+    apparent_ethnicity: string;
+    apparent_age_range: string;
+    speech_style: string;
+    appearance_description: string;
+  };
 };
 type Product = { id: string; name: string; brand: string; one_liner: string };
 type BriefFrame = {
@@ -267,15 +286,105 @@ function Home() {
         </form>
         {scrapedCreator && (
           <div className="card" style={{ marginTop: 14, background: "rgba(0,0,0,0.02)" }}>
-            <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-              <strong>@{scrapedCreator.handle}</strong>
-              <span className="muted-sm">{scrapedCreator.archetype} · energy {scrapedCreator.energy_rating ?? "—"}/10</span>
+            <div className="row" style={{ alignItems: "flex-start", gap: 14 }}>
+              {scrapedCreator.avatar_url && (
+                <img
+                  src={scrapedCreator.avatar_url}
+                  alt=""
+                  style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)" }}
+                />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                  <strong style={{ fontSize: 16 }}>@{scrapedCreator.handle}</strong>
+                  <span className="muted-sm">
+                    {scrapedCreator.archetype} · energy {scrapedCreator.energy_rating ?? "—"}/10
+                    {scrapedCreator.followers != null && <> · {scrapedCreator.followers.toLocaleString()} followers</>}
+                  </span>
+                </div>
+                {scrapedCreator.bio && (
+                  <p className="muted-sm" style={{ marginTop: 4, fontSize: 12, fontStyle: "italic" }}>{scrapedCreator.bio}</p>
+                )}
+                <p className="muted-sm" style={{ marginTop: 6 }}>Top pain: {scrapedCreator.top_pain}</p>
+              </div>
             </div>
-            <p className="muted-sm" style={{ marginTop: 6 }}>Top pain: {scrapedCreator.top_pain}</p>
-            {scrapedCreator.dossier_excerpt && (
-              <p style={{ marginTop: 8, fontSize: 13 }}>{scrapedCreator.dossier_excerpt}</p>
+
+            {scrapedCreator.persona && (
+              <div style={{ marginTop: 14, padding: 12, background: "rgba(0,0,0,0.03)", borderRadius: 8 }}>
+                <span className="eyebrow" style={{ fontSize: 10 }}>Persona</span>
+                <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                  {[
+                    { label: "Gender", value: scrapedCreator.persona.gender_presentation },
+                    { label: "Ethnicity", value: scrapedCreator.persona.apparent_ethnicity?.replace(/_/g, " ") },
+                    { label: "Age", value: scrapedCreator.persona.apparent_age_range },
+                  ].map((p) => (
+                    <span key={p.label} style={{
+                      padding: "3px 9px",
+                      fontSize: 11,
+                      border: "1px solid var(--border)",
+                      borderRadius: 999,
+                      background: "white",
+                    }}>
+                      <span className="muted-sm" style={{ marginRight: 4 }}>{p.label}:</span>
+                      <strong>{p.value || "—"}</strong>
+                    </span>
+                  ))}
+                </div>
+                {scrapedCreator.persona.speech_style && (
+                  <p style={{ marginTop: 10, fontSize: 13 }}>
+                    <span className="muted-sm" style={{ marginRight: 6 }}>Speech:</span>
+                    {scrapedCreator.persona.speech_style}
+                  </p>
+                )}
+                {scrapedCreator.persona.appearance_description && (
+                  <p style={{ marginTop: 6, fontSize: 13 }}>
+                    <span className="muted-sm" style={{ marginRight: 6 }}>Appearance:</span>
+                    {scrapedCreator.persona.appearance_description}
+                  </p>
+                )}
+              </div>
             )}
-            <p className="muted-sm" style={{ marginTop: 8, fontSize: 12 }}>
+
+            {scrapedCreator.dossier_excerpt && (
+              <p style={{ marginTop: 12, fontSize: 13 }}>{scrapedCreator.dossier_excerpt}</p>
+            )}
+
+            {scrapedCreator.recent_videos && scrapedCreator.recent_videos.some((v) => v.cover_url) && (
+              <div style={{ marginTop: 14 }}>
+                <span className="eyebrow" style={{ fontSize: 10 }}>Recent posts</span>
+                <div className="row" style={{ gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                  {scrapedCreator.recent_videos.slice(0, 6).map((v, i) =>
+                    v.cover_url ? (
+                      <a
+                        key={i}
+                        href={v.web_video_url ?? "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={v.caption ?? ""}
+                        style={{ display: "block", position: "relative", flex: "0 0 auto", width: 90 }}
+                      >
+                        <img
+                          src={v.cover_url}
+                          alt=""
+                          style={{ width: 90, height: 120, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }}
+                        />
+                        {v.play_count != null && (
+                          <span style={{
+                            position: "absolute", bottom: 4, left: 4, right: 4,
+                            fontSize: 10, color: "white",
+                            textShadow: "0 1px 2px rgba(0,0,0,0.6)",
+                          }}>
+                            ▶ {v.play_count > 1_000_000 ? `${(v.play_count / 1_000_000).toFixed(1)}M` : v.play_count > 1000 ? `${(v.play_count / 1000).toFixed(0)}k` : v.play_count}
+                          </span>
+                        )}
+                      </a>
+                    ) : null
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="muted-sm" style={{ marginTop: 12, fontSize: 12 }}>
               Handle copied into the brief form above — pick a product and click Generate.
             </p>
           </div>

@@ -14,6 +14,14 @@ export type ApifyTikTokPost = {
   shareCount?: number;
   commentCount?: number;
   createTime?: number;
+  videoMeta?: {
+    coverUrl?: string;
+    originalCoverUrl?: string;
+    duration?: number;
+    width?: number;
+    height?: number;
+    downloadAddr?: string;
+  };
   authorMeta?: {
     name?: string;
     nickName?: string;
