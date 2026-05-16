@@ -60,6 +60,17 @@ export async function ensureSchema(): Promise<void> {
     await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS final_video_key TEXT;`;
     await s`CREATE INDEX IF NOT EXISTS briefs_created_at_idx ON briefs (created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS briefs_status_idx ON briefs (status);`;
+    // Creators added at runtime via the TikTok-scrape onboarding flow.
+    // Base catalog still lives in data/creators.json (read-only); this table
+    // captures anything onboarded after deploy so it survives container restarts.
+    await s`
+      CREATE TABLE IF NOT EXISTS creators_added (
+        handle TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        created_at BIGINT NOT NULL
+      );
+    `;
+    await s`CREATE INDEX IF NOT EXISTS creators_added_created_at_idx ON creators_added (created_at DESC);`;
   })();
   return g.__schemaReady;
 }

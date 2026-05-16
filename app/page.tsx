@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Sparkles, Send, TrendingUp, Image as ImageIcon, ArrowRight } from "lucide-react";
+import { useToast } from "@/components/toast";
 
 type Creator = {
   handle: string;
@@ -33,7 +35,19 @@ type Brief = {
   created_at: number;
 };
 
-export default function Home() {
+export default function HomeWrapper() {
+  // useSearchParams() bails out of static prerender; wrap in Suspense so the
+  // build can prerender the shell while the search-param logic resolves on the client.
+  return (
+    <Suspense fallback={null}>
+      <Home />
+    </Suspense>
+  );
+}
+
+function Home() {
+  const toast = useToast();
+  const searchParams = useSearchParams();
   const [creators, setCreators] = useState<Creator[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [briefs, setBriefs] = useState<Brief[]>([]);
@@ -63,9 +77,14 @@ export default function Home() {
     });
     setScraping(false);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setScrapeError(data.error ?? "scrape failed"); return; }
+    if (!res.ok) {
+      setScrapeError(data.error ?? "scrape failed");
+      toast.error("Couldn't onboard creator", data?.error);
+      return;
+    }
     setScrapedCreator(data.creator);
     setHandle(data.creator?.handle ?? "");
+    toast.success(`Onboarded @${data.creator?.handle}`, `archetype: ${data.creator?.archetype}`);
     refresh();
   }
 
@@ -93,6 +112,15 @@ export default function Home() {
     };
   }, []);
 
+  // Pre-fill the new-brief form when arriving from /?prefill=<handle>
+  // (e.g. from the "Use" buttons on the creators table or per-creator pages).
+  useEffect(() => {
+    const pf = searchParams?.get("prefill");
+    if (pf && pf !== handle) setHandle(pf);
+    // intentionally only on mount / when prefill query changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -104,7 +132,12 @@ export default function Home() {
     });
     setSubmitting(false);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setError(data.error ?? "failed"); return; }
+    if (!res.ok) {
+      setError(data.error ?? "failed");
+      toast.error("Couldn't generate brief", data?.error);
+      return;
+    }
+    toast.success(`Brief drafted for @${handle}`, "Frames generating in the background");
     setHandle("");
     refresh();
     if (data?.id) window.location.href = `/briefs/${data.id}`;

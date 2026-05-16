@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCreators, findCreator } from "@/lib/data";
+import { getCreators, findCreator, ensureCreatorsLoaded } from "@/lib/data";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -7,6 +7,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Hydrate runtime catalog from Postgres on the first call after cold start
+  // so creators onboarded in previous sessions appear on the Railway instance.
+  await ensureCreatorsLoaded();
   const q = req.nextUrl.searchParams.get("q")?.trim().toLowerCase();
   const handle = req.nextUrl.searchParams.get("handle");
   if (handle) {

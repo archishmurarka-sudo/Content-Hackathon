@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAuthed } from "@/lib/auth";
 import { scrapeTikTokProfile } from "@/lib/apify";
 import { synthesizeCreatorFromPosts } from "@/lib/creator_sync";
-import { addCreator } from "@/lib/data";
+import { addCreator, ensureCreatorsLoaded } from "@/lib/data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,9 +27,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    await ensureCreatorsLoaded();
     const posts = await scrapeTikTokProfile(input, { resultsPerPage: 10 });
     const creator = await synthesizeCreatorFromPosts(posts);
-    addCreator(creator);
+    await addCreator(creator);
     return NextResponse.json({
       creator,
       posts_sampled: posts.length,

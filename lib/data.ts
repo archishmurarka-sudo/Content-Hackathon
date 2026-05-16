@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { scorePrototypeVirality } from "./virality";
+import { hasDb, sql, ensureSchema } from "./db";
 
 export type Creator = {
   handle: string;
@@ -59,9 +60,37 @@ export function getCreators(): Creator[] {
   return [...added, ...g.__creators];
 }
 
-export function addCreator(c: Creator): Creator {
+// Load DB-backed runtime creators into the in-memory map exactly once per
+// process. Sync `getCreators()` reads from the map, so any API route that
+// needs the freshest set should `await ensureCreatorsLoaded()` first.
+const gLoad = globalThis as unknown as { __creatorsLoaded?: Promise<void> };
+export async function ensureCreatorsLoaded(): Promise<void> {
+  if (!hasDb()) return;
+  if (gLoad.__creatorsLoaded) return gLoad.__creatorsLoaded;
+  gLoad.__creatorsLoaded = (async () => {
+    await ensureSchema();
+    const rows = await sql()`SELECT data FROM creators_added ORDER BY created_at`;
+    if (!g.__creators_added) g.__creators_added = new Map();
+    for (const r of rows) {
+      const c = r.data as Creator;
+      g.__creators_added.set(c.handle.toLowerCase(), c);
+    }
+  })();
+  return gLoad.__creatorsLoaded;
+}
+
+export async function addCreator(c: Creator): Promise<Creator> {
   if (!g.__creators_added) g.__creators_added = new Map();
   g.__creators_added.set(c.handle.toLowerCase(), c);
+  if (hasDb()) {
+    await ensureSchema();
+    const s = sql();
+    await s`
+      INSERT INTO creators_added (handle, data, created_at)
+      VALUES (${c.handle}, ${s.json(c) as any}, ${Date.now()})
+      ON CONFLICT (handle) DO UPDATE SET data = EXCLUDED.data
+    `;
+  }
   return c;
 }
 

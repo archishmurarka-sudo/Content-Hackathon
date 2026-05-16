@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findCreator, rankPrototypes, PRODUCTS } from "@/lib/data";
+import { findCreator, rankPrototypes, PRODUCTS, ensureCreatorsLoaded } from "@/lib/data";
 import { generateStoryboard } from "@/lib/storyboard";
 import { createBrief, listBriefs, setStoryboard, setFailed, initFrames, setFrame } from "@/lib/briefs";
 import { generateFrameImage } from "@/lib/images";
@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
   const youtube_url = typeof body.youtube_url === "string" ? body.youtube_url.trim() : "";
 
   if (!handle) return NextResponse.json({ error: "creator_handle required" }, { status: 400 });
+  // Hydrate from Postgres so creators onboarded via /api/creators/scrape on a
+  // previous request (or before this container booted) are findable.
+  await ensureCreatorsLoaded();
   const creator = findCreator(handle);
   if (!creator) return NextResponse.json({ error: `creator @${handle} not found in catalog` }, { status: 404 });
   const product = PRODUCTS.find((p) => p.id === product_id);
