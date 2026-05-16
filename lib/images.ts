@@ -7,7 +7,7 @@ import { putAsset } from "./storage";
 import { bump } from "./usage";
 
 const KEY = process.env.GEMINI_API_KEY;
-const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.0-flash-preview-image-generation";
+const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 export type GeneratedImage = { url: string; key: string };

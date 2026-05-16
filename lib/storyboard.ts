@@ -27,7 +27,7 @@ export type Storyboard = {
 };
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash-exp";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
 function buildPrompt(creator: Creator, productLine: string, prototypes: Prototype[], target_s: number) {
   const protoSummary = prototypes
