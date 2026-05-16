@@ -910,3 +910,98 @@ function ShotCard({
     </div>
   );
 }
+
+// WhatsApp chat-bubble preview — the "bot" panel beside the Send form.
+// Renders what the recipient will actually see: media thumbnail, hook in
+// bold, brief metadata, CTA in italics, and the handoff URL. Updates live
+// as the operator types the phone number and as the brief state changes.
+function WhatsAppPreview({ brief, testPhone, phone }: { brief: Brief; testPhone: string; phone: string }) {
+  const recipient = (phone || testPhone).replace(/[^0-9]/g, "");
+  const previewRecipient = recipient
+    ? `+${recipient.slice(0, 2)} ${recipient.slice(2, 7)} ${recipient.slice(7)}`.trim()
+    : `+${testPhone}`;
+
+  // Same fallback the deliver route uses: stitched mp4 → first ready clip → first ready frame
+  const finalUrl = brief.final_video_url ?? null;
+  const firstClip = brief.frames?.find((f) => f.video_status === "ready" && f.video_url) ?? null;
+  const firstFrame = brief.frames?.find((f) => f.status === "ready" && f.image_url) ?? null;
+  const mediaUrl = finalUrl ?? firstClip?.video_url ?? firstFrame?.image_url ?? null;
+  const mediaKind: "video" | "image" = finalUrl || firstClip ? "video" : "image";
+
+  const hook = brief.storyboard?.hook ?? `Your @${brief.creator_handle} brief`;
+  const meta = `${brief.storyboard?.shots?.length ?? brief.frames?.length ?? "?"} shots · ${brief.target_duration_s}s`;
+  const cta = brief.storyboard?.cta;
+  const handoffUrl = `/handoff/${brief.id}`;
+  const delivered = brief.delivery?.status === "sent";
+
+  return (
+    <div style={{
+      border: "1px solid #e3e3e3",
+      borderRadius: 14,
+      background: "#e5ddd5",
+      padding: 14,
+      boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
+    }}>
+      <div className="row" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span className="eyebrow" style={{ fontSize: 10, color: "#506069" }}>Preview · WhatsApp bot</span>
+        <span style={{ fontSize: 10, color: "#506069", fontFamily: "monospace" }}>To {previewRecipient}</span>
+      </div>
+      <div style={{
+        background: "#dcf8c6",
+        borderRadius: "10px 10px 2px 10px",
+        padding: 8,
+        maxWidth: "100%",
+        marginLeft: "auto",
+        fontSize: 13,
+        color: "#222",
+        boxShadow: "0 1px 0.5px rgba(0,0,0,0.13)",
+      }}>
+        {mediaUrl && (
+          <div style={{ background: "#000", borderRadius: 6, overflow: "hidden", marginBottom: 6, aspectRatio: "9 / 16", maxHeight: 240 }}>
+            {mediaKind === "video" ? (
+              <video
+                src={mediaUrl}
+                muted
+                playsInline
+                preload="metadata"
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            ) : (
+              <img
+                src={mediaUrl}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            )}
+          </div>
+        )}
+        <div style={{ lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+          <strong>“{hook}”</strong>
+          {"\n"}
+          <span style={{ fontWeight: 600 }}>{meta}</span>
+          {cta && (
+            <>
+              {"\n\n"}
+              CTA: <em>{cta}</em>
+            </>
+          )}
+          {"\n\n"}
+          {finalUrl ? "Tap the video to preview, or download here:" : "Open the brief:"}
+          {"\n"}
+          <span style={{ color: "#1f6dd0", textDecoration: "underline" }}>{handoffUrl}</span>
+        </div>
+        <div style={{ textAlign: "right", marginTop: 4, fontSize: 10, color: "#7b8a90" }}>
+          {delivered ? (
+            <>
+              {brief.delivery?.sent_at ? new Date(brief.delivery.sent_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+              {" "}
+              <span style={{ color: "#34b7f1" }}>✓✓</span>
+            </>
+          ) : (
+            <>not sent yet</>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
