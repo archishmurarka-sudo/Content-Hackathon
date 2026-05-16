@@ -4,6 +4,12 @@
 // Set PERISKOPE_API_KEY and PERISKOPE_PHONE (your sending number, with
 // country code, no '+').
 //
+// SAFETY: when PERISKOPE_TEST_MODE=true, sends are restricted to numbers
+// in PERISKOPE_ALLOWLIST (comma-separated, normalized, no '+'). Any other
+// recipient throws before a Periskope API call is made — this protects
+// against accidental messages while we're testing on a real WhatsApp
+// number. Remove TEST_MODE in production after the flow is verified.
+//
 // We send the final assembled clip if available; otherwise we send one message
 // per shot clip in order. The dashboard URL is included so the creator can
 // open the full brief.
@@ -12,6 +18,34 @@ import fs from "node:fs";
 import path from "node:path";
 
 const PERISKOPE_BASE = process.env.PERISKOPE_API_BASE || "https://api.periskope.app/v1";
+
+function isTestMode(): boolean {
+  const v = (process.env.PERISKOPE_TEST_MODE ?? "").toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
+}
+
+function allowlist(): Set<string> {
+  return new Set(
+    (process.env.PERISKOPE_ALLOWLIST ?? "")
+      .split(",")
+      .map((s) => s.trim().replace(/[^0-9]/g, ""))
+      .filter(Boolean)
+  );
+}
+
+export function assertRecipientAllowed(to: string): void {
+  if (!isTestMode()) return;
+  const norm = to.replace(/[^0-9]/g, "");
+  const allow = allowlist();
+  if (allow.size === 0) {
+    throw new Error("PERISKOPE_TEST_MODE is on but PERISKOPE_ALLOWLIST is empty — refusing to send.");
+  }
+  if (!allow.has(norm)) {
+    throw new Error(
+      `PERISKOPE_TEST_MODE blocked send to ${norm}. Only ${[...allow].join(", ")} is allowed during testing.`
+    );
+  }
+}
 
 export type SendInput = {
   to: string;                  // E.164 number, e.g. "919999999999" (no +)
@@ -31,6 +65,8 @@ export async function sendWhatsAppVideos(input: SendInput): Promise<SendResult> 
   if (!from) throw new Error("PERISKOPE_PHONE not set");
   if (!input.media_urls.length) throw new Error("no media to send");
   const to = normalizePhone(input.to);
+  // Hard gate — refuse non-allowlisted recipients when TEST_MODE is on.
+  assertRecipientAllowed(to);
 
   // Send caption + first video as the main message; trail with the rest.
   const first = input.media_urls[0];
