@@ -1,0 +1,472 @@
+[
+  {
+    "handle": "skincarepronikki",
+    "archetype": "esthetician",
+    "kalo_gmv": 1092500,
+    "winners": 10,
+    "top_pain": "wrecking your skin",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A 51-year-old licensed esthetician who communicates with direct, instructional authority. She presents a clear problem-solution framework, preemptively answers user questions, and drives conversions with urgent, sale-focused calls to action.",
+    "has_dossier": true
+  },
+  {
+    "handle": "_serahmichelle",
+    "archetype": "beauty_guru",
+    "kalo_gmv": 942900,
+    "winners": 10,
+    "top_pain": "dark spots",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator uses a direct, diagnostic voice, framing specific skin insecurities as problems that require her recommended product as the definitive solution. She combines clinical-sounding product names with a simple 'if-then' structure, then closes by creating urgency around a high-value bundle or",
+    "has_dossier": true
+  },
+  {
+    "handle": "bribez1",
+    "archetype": "product_reviewer",
+    "kalo_gmv": 626325,
+    "winners": 10,
+    "top_pain": "cowlick",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice is a blend of raw vulnerability and direct-response marketing. He hooks the audience with a dramatic personal problem, builds trust by documenting his emotional journey day-by-day, and then converts that trust into sales using strong urgency and scarcity.",
+    "has_dossier": true
+  },
+  {
+    "handle": "iamsk8bordb",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 513190,
+    "winners": 10,
+    "top_pain": "low energy levels",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: A high-energy, direct-to-camera voice that blends casual slang ('pissed off', 'bricked up') with specific product ingredients to build relatable authority. He follows a rigid Problem-Agitation-Solution script, using his own testimonial as proof before driving a hard, scarcity-based CTA.",
+    "has_dossier": true
+  },
+  {
+    "handle": "cakedfinds",
+    "archetype": "deal_hunter",
+    "kalo_gmv": 504440,
+    "winners": 10,
+    "top_pain": "missing out on a significant discount",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator uses a highly repetitive and formulaic voice that is purely transactional. They focus exclusively on the mechanics of a time-sensitive deal, using direct commands and urgent language to drive immediate action without ever discussing the product itself.",
+    "has_dossier": true
+  },
+  {
+    "handle": "iamvictoriadoss",
+    "archetype": "beauty_guru",
+    "kalo_gmv": 497208,
+    "winners": 8,
+    "top_pain": "receding hairline",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A testimonial-driven authority who builds trust by documenting her personal hair loss journey. She uses a problem-agitation-solution framework, preemptively discrediting common alternatives like Minoxidil to position her recommended product as the only permanent, scientifically-backed solution.",
+    "has_dossier": true
+  },
+  {
+    "handle": "adoseofwellness",
+    "archetype": "pharmacist",
+    "kalo_gmv": 492270,
+    "winners": 10,
+    "top_pain": "back pain",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: The voice is that of a calm, credible pharmacist who educates viewers on the science behind health supplements. They build trust through their credentials and clear explanations, then pivot to a specific product recommendation, using social proof and scarcity to drive an urgent purchase.",
+    "has_dossier": true
+  },
+  {
+    "handle": "nurselexa",
+    "archetype": "health_educator",
+    "kalo_gmv": 351050,
+    "winners": 10,
+    "top_pain": "flat hair",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator embodies a 'trusted professional' persona, often through a doctor/patient role-play, to diagnose common hair concerns with clinical-sounding language. She builds a case for a complex problem requiring multiple solutions before revealing a single, affordable, all-in-one product, using pr",
+    "has_dossier": true
+  },
+  {
+    "handle": "shopbyjake",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 323760,
+    "winners": 10,
+    "top_pain": "low energy",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: A relatable 'health hacker' who builds trust through his own dramatic transformation story. He simplifies complex health issues into a clear problem-solution narrative, positioning an 'all-in-one' product as a superior, cost-effective alternative to traditional options, then uses intense scarcity to",
+    "has_dossier": true
+  },
+  {
+    "handle": "staringaj",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 290780,
+    "winners": 10,
+    "top_pain": "patchy beard",
+    "energy_rating": 9,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice is a high-energy hype persona, communicating almost exclusively through short, boastful exclamations and gym slang. The style is performative and confident, prioritizing energy and vibe over any narrative or educational content.",
+    "has_dossier": true
+  },
+  {
+    "handle": "theaustinbrown",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 237820,
+    "winners": 10,
+    "top_pain": "getting scammed by fake listings",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator acts as a trusted guide in a confusing market. He uses a repetitive, urgent hook ('This is fake') to establish a problem, then builds credibility with social proof (X units sold) before delivering a simple, direct call-to-action to the 'real' product.",
+    "has_dossier": true
+  },
+  {
+    "handle": "marketerohispano",
+    "archetype": "health_educator",
+    "kalo_gmv": 222000,
+    "winners": 10,
+    "top_pain": "thinning hair",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A credentialed healthcare professional (Nurse Practitioner) who speaks with a calm, educational authority. He builds trust by explaining the science behind common health and beauty problems in simple terms before recommending a specific, personally-vetted product as a logical solution.",
+    "has_dossier": true
+  },
+  {
+    "handle": "lilred_diamond3",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 214884,
+    "winners": 10,
+    "top_pain": "receding hairline",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator embodies a 'guy who found a secret' persona, using his personal hair-growth transformation as undeniable proof. His voice is direct and follows a rigid Problem-Agitation-Solution script, dismissing mainstream competitors and creating urgency with a constant emphasis on limited-time sale",
+    "has_dossier": true
+  },
+  {
+    "handle": "antoninalgriffin",
+    "archetype": "product_reviewer",
+    "kalo_gmv": 202040,
+    "winners": 10,
+    "top_pain": "using potentially unsanitary hotel towels",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: She communicates like a savvy, confident friend giving you an unfiltered recommendation. Her voice blends sassy, direct-address humor with genuine personal anecdotes to build trust, making her product pitches feel like authentic, must-have advice.",
+    "has_dossier": true
+  },
+  {
+    "handle": "sophieabrams",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 184870,
+    "winners": 8,
+    "top_pain": "stress",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: The creator adopts a direct, authoritative female voice to address male performance issues. She uses a repeatable problem-agitation-solution formula, building trust through personal anecdotes about her partner and preemptively validating the product with mentions of lab tests and its tendency to sel",
+    "has_dossier": true
+  },
+  {
+    "handle": "travelsntrends",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 154302,
+    "winners": 8,
+    "top_pain": "paying for shipping",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A direct, problem-solving voice that uses casual slang ('coochie', 'y'all') to build rapport and empathy around sensitive issues. She establishes trust by preemptively handling skepticism about TikTok Shop and sharing personal experiences, closing with a simple, no-pressure call to action.",
+    "has_dossier": true
+  },
+  {
+    "handle": "ashleyroseinbloom",
+    "archetype": "product_reviewer",
+    "kalo_gmv": 148040,
+    "winners": 9,
+    "top_pain": "lack of storage in a nightstand",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice is characterized by high-energy, conversational enthusiasm. She rapidly showcases a product's most desirable features using simple, declarative sentences and intensifiers like 'so pretty,' culminating in a direct call to action that often includes urgency.",
+    "has_dossier": true
+  },
+  {
+    "handle": "thehuntervance",
+    "archetype": "grooming_influencer",
+    "kalo_gmv": 112828,
+    "winners": 8,
+    "top_pain": "desire for more or better facial hair growth",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice blends dramatic, high-intensity character acting with aggressive, direct-to-camera motivational talks. He establishes authority through assertive language and personal testimonials, selling products by positioning himself as the primary proof of their effectiveness.",
+    "has_dossier": true
+  },
+  {
+    "handle": "mom_wife04",
+    "archetype": "beauty_guru",
+    "kalo_gmv": 102749,
+    "winners": 10,
+    "top_pain": "slow hair growth",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator speaks in urgent, conversational Haitian Creole, directly addressing viewers with hair loss. Her persuasive formula relies on social proof and dramatic personal testimonials, powerfully reinforced by a recurring warning that the product is so effective it will grow hair anywhere it touc",
+    "has_dossier": true
+  },
+  {
+    "handle": "lisarobinson145",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 97897,
+    "winners": 10,
+    "top_pain": "lack of focus",
+    "energy_rating": 6,
+    "dossier_excerpt": "**Voice Summary**: The creator acts as a 'researched friend,' starting with a shared, relatable problem like fatigue. She builds trust not with high energy, but by calmly explaining the scientific-sounding mechanisms of a product (e.g., 'liposomal', 'beadlets') and validating it with her personal routine and third-par",
+    "has_dossier": true
+  },
+  {
+    "handle": "cheneyconcepts",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 96572,
+    "winners": 6,
+    "top_pain": "can't get pumped up",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator acts as a relatable 'everyman' giving an 'honest review' on men's wellness products. He uses a simple problem-solution structure, often in numbered lists, to share his personal transformation story with casual, sometimes humorous language, building trust before delivering a direct call",
+    "has_dossier": true
+  },
+  {
+    "handle": "bearthevoice3",
+    "archetype": "product_reviewer",
+    "kalo_gmv": 88706,
+    "winners": 10,
+    "top_pain": "concern about receiving fake products",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A blunt, no-BS authority who uses casual profanity to signal authenticity and build trust. His core method is exposing fake products to validate the 'real deal', using social proof like verification check marks and ending every video with a direct command CTA and a signature affectionate sign-off.",
+    "has_dossier": true
+  },
+  {
+    "handle": "chelchel1110",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 82615,
+    "winners": 5,
+    "top_pain": "low stamina",
+    "energy_rating": 9,
+    "dossier_excerpt": "**Voice Summary**: The voice of a brutally honest best friend who uses shocking humor, profanity, and radical candor to share life-changing secrets. She builds trust through extreme relatability and personal testimony, making product recommendations feel like insider advice rather than a sales pitch.",
+    "has_dossier": true
+  },
+  {
+    "handle": "shopaholicismyname",
+    "archetype": "health_educator",
+    "kalo_gmv": 73583,
+    "winners": 9,
+    "top_pain": "losing testosterone with age",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: Adopts a 'lab coat' persona, using clinical vocabulary to educate men on the biological mechanisms behind common health issues like low testosterone and poor circulation. They build trust through scientific explanations before calmly and directly recommending a specific, evidence-backed supplement a",
+    "has_dossier": true
+  },
+  {
+    "handle": "veezers",
+    "archetype": "health_educator",
+    "kalo_gmv": 64685,
+    "winners": 8,
+    "top_pain": "concern about 'forever chemicals' in default watch bands",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A calm and credible professional who speaks with practical authority. She builds trust by blending her professional expertise and personal experience to recommend products as smart, value-driven solutions to specific problems, often justifying cost against future pain or expense.",
+    "has_dossier": true
+  },
+  {
+    "handle": "officiallytracytime",
+    "archetype": "product_reviewer",
+    "kalo_gmv": 63738,
+    "winners": 6,
+    "top_pain": "fine, thin hair",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: The voice of a helpful, pragmatic friend sharing a recent find. She builds trust through calm, conversational storytelling about her own everyday problems, then offers a product as a practical solution with a gentle, no-pressure recommendation to 'check it out'.",
+    "has_dossier": true
+  },
+  {
+    "handle": "rphreviews",
+    "archetype": "pharmacist",
+    "kalo_gmv": 62790,
+    "winners": 10,
+    "top_pain": "cannot sleep",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator speaks as a seasoned pharmacist, establishing immediate authority with his credentials in every video. He follows a strict formula: identify a common health problem, explain the underlying science in simple terms, recommend key ingredients, and then seamlessly pivot to a specific produc",
+    "has_dossier": true
+  },
+  {
+    "handle": "cakes.by.cynthia",
+    "archetype": "deal_hunter",
+    "kalo_gmv": 59842,
+    "winners": 9,
+    "top_pain": "missing out on a good deal",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: The voice is a sassy, savvy friend who uses casual slang and direct address ('y'all') to let you in on a secret deal. She creates immediate urgency by contrasting 'regular price' with a 'crazy,' limited-time offer, consistently closing with the signature phrase 'if it's still available, it's going t",
+    "has_dossier": true
+  },
+  {
+    "handle": "peezykeepitp",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 50873,
+    "winners": 10,
+    "top_pain": "male sexual performance",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator uses a casual, slang-filled voice within humorous, sexually-charged skits to demonstrate a product's dramatic effects. Credibility is built through exaggerated personal stories and social proof, leading to an urgent, scarcity-driven call to action.",
+    "has_dossier": true
+  },
+  {
+    "handle": "nich_williams.jr",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 50176,
+    "winners": 10,
+    "top_pain": "desire for fuller eyebrows",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: The creator acts as a live case study, documenting his hair growth journey day-by-day to build undeniable visual proof. He pairs this personal testimonial with a simple explanation of 'natural' ingredients before launching into a fast-paced, urgent pitch centered on complex bundling deals and flash",
+    "has_dossier": true
+  },
+  {
+    "handle": "supremecoles",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 47902,
+    "winners": 9,
+    "top_pain": "declining testosterone levels",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: Speaks like a trusted older brother giving you 'the game' on men's sexual health, using a blend of street slang ('corn industry') and specific ingredient names ('Shilajit'). His style is direct and problem-focused, building authority through insider knowledge before delivering a product recommendati",
+    "has_dossier": true
+  },
+  {
+    "handle": "rebecahuffman",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 21345,
+    "winners": 5,
+    "top_pain": "brain fog",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A bilingual, confident friend who acts as a well-researched guide, blending vulnerable personal stories (perimenopause, anxiety) with scientific credibility (liposomal, third-party tested) to solve relatable problems. Her fast-paced, educational style preemptively handles skepticism and always ends",
+    "has_dossier": true
+  },
+  {
+    "handle": "legendarylootfinds",
+    "archetype": "deal_hunter",
+    "kalo_gmv": 20345,
+    "winners": 8,
+    "top_pain": "fear of missing out on a major sale",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice is a high-urgency, transactional sales pitch. It relies on repetitive, hard-hitting phrases like 'last day' and 'act now' to create intense FOMO and drive immediate conversions without any personal narrative or brand building.",
+    "has_dossier": true
+  },
+  {
+    "handle": "balancedbyluke",
+    "archetype": "product_reviewer",
+    "kalo_gmv": 9221,
+    "winners": 3,
+    "top_pain": "thinning issues",
+    "energy_rating": 4,
+    "dossier_excerpt": "**Voice Summary**: The voice is of a pragmatic and helpful friend sharing a 'pro-tip' he discovered himself. He builds trust by focusing exclusively on value and efficiency (e.g., buying in bulk, bundling) rather than product hype, using direct, simple language to make his cost-saving argument.",
+    "has_dossier": true
+  },
+  {
+    "handle": "amber.lynn.28",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": 2921,
+    "winners": 1,
+    "top_pain": "poor sleep",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A relatable healthcare professional who builds trust by sharing her own 'I was doing it wrong' stories. She educates her audience on a common but overlooked problem, then confidently presents an all-in-one product as the simple, correct solution, leveraging her nursing authority to seal the recommen",
+    "has_dossier": true
+  },
+  {
+    "handle": "ryan_reviews",
+    "archetype": "deal_hunter",
+    "kalo_gmv": 1503,
+    "winners": 0,
+    "top_pain": "fear of missing out on a deal",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice is a high-energy, urgent sales pitch that exclusively leverages FOMO. They use short, commanding sentences and repetitive phrases to create immense time pressure, driving immediate purchase without ever discussing the product's value or building personal trust.",
+    "has_dossier": true
+  },
+  {
+    "handle": "b_tari",
+    "archetype": "product_reviewer",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "back fat",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: A relatable and frank problem-solver who uses her own body and experience as the primary evidence. She speaks conversationally to her 'girlies,' directly addressing common insecurities like 'back fat' or 'FUPA' before presenting a product as the clear solution with a simple, helpful call to action.",
+    "has_dossier": true
+  },
+  {
+    "handle": "betterbybrian",
+    "archetype": "deal_hunter",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "paying full price for a product",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: The voice is a deal-focused insider who urgently shares 'hacks' for TikTok Shop products. He uses direct commands and a simple, repeatable formula (standard price vs. hack price) to create FOMO and drive immediate sales, focusing entirely on the transaction mechanics over product benefits.",
+    "has_dossier": true
+  },
+  {
+    "handle": "contentcreatorhuman",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "inability to relax",
+    "energy_rating": 4,
+    "dossier_excerpt": "**Voice Summary**: This creator uses a calm, testimonial-style voice, building trust by sharing personal vulnerabilities like anxiety and hair loss. They persuade by demonstrating a product's effect on their own state of being, using simple ingredient callouts and a soft, conditional call-to-action.",
+    "has_dossier": true
+  },
+  {
+    "handle": "discountdealt",
+    "archetype": "deal_hunter",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "cost of supplements",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: A rapid-fire deal announcer who exclusively focuses on the mechanics of a high-value, limited-time offer. The voice uses a repeatable 'Deal -> Instructions -> Urgency' script, leveraging phrases like 'four for one' and 'ends tonight' to drive immediate action through the TikTok Shop 'orange shopping",
+    "has_dossier": true
+  },
+  {
+    "handle": "hotshopdeals4u",
+    "archetype": "deal_hunter",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "missing out on a good deal",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator is a direct, instructional deal announcer who focuses exclusively on the mechanics of claiming a discount. Their voice uses a simple, repetitive formula of announcing a deal, providing explicit steps, and creating intense urgency to drive immediate action.",
+    "has_dossier": true
+  },
+  {
+    "handle": "kaylynreve",
+    "archetype": "product_reviewer",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "thin eyebrows",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: The voice of a savvy, practical friend who quickly identifies a relatable everyday problem and shares a simple, effective product solution. Her authority comes from personal testimony, and she closes with a helpful, direct call-to-action that includes a touch of urgency.",
+    "has_dossier": true
+  },
+  {
+    "handle": "lotuswellness8",
+    "archetype": "wellness_influencer",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "aging",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: The creator speaks as a relatable peer (47 years old) who has discovered a scientific 'secret' to 'aging in reverse.' She blends her personal transformation story with simplified scientific concepts (NAD, NMN) to build authority, positioning her recommended supplements as an accessible and effective",
+    "has_dossier": true
+  },
+  {
+    "handle": "lovedbyheather",
+    "archetype": "gardening_influencer",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "wanting to start a pollinator garden but not knowing how",
+    "energy_rating": 6,
+    "dossier_excerpt": "**Voice Summary**: The voice is a practical and enthusiastic friend who shares products she genuinely uses in her farm life. She builds trust through direct, simple language, focusing on tangible benefits ('no filler', 'super cute') and ends with a helpful, no-pressure call-to-action.",
+    "has_dossier": true
+  },
+  {
+    "handle": "ofertas.ttshop21",
+    "archetype": "beauty_guru",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "not performing at night",
+    "energy_rating": 7,
+    "dossier_excerpt": "**Voice Summary**: This creator uses a direct, high-energy sales voice targeting male insecurities. They employ simple, conversational language and a rapid problem-solution structure, relying on social proof and urgency to drive viewers to a clear, commanding call-to-action involving the 'carrito naranja'.",
+    "has_dossier": true
+  },
+  {
+    "handle": "orangeshoppin",
+    "archetype": "deal_hunter",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "paying full price for a product",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice is a direct-response advertiser focused entirely on driving immediate sales through time-based urgency. They use simple, conversational language and direct commands, framing every purchase as a time-sensitive opportunity that will expire at midnight.",
+    "has_dossier": true
+  },
+  {
+    "handle": "ttshopofertasdeldia",
+    "archetype": "deal_hunter",
+    "kalo_gmv": null,
+    "winners": 0,
+    "top_pain": "missing out on a low price/deal",
+    "energy_rating": 8,
+    "dossier_excerpt": "**Voice Summary**: This creator's voice is a high-energy, direct-response sales pitch. They use simple, repetitive commands and intense urgency ('termina hoy', 'corre') to drive immediate clicks on the 'carrito naranja' for 'viral' products at massive, time-limited discounts.",
+    "has_dossier": true
+  }
+]
