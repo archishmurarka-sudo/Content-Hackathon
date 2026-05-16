@@ -58,6 +58,8 @@ type Brief = {
     inspired_by_video_ids: string[];
     total_duration_s: number;
     shots: Shot[];
+    creator_gender?: "female" | "male" | "non-binary";
+    banner_choice?: "A" | "B";
   };
   frames?: Frame[];
   youtube_ref?: YouTubeRef;
@@ -394,10 +396,26 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
       {brief.storyboard && (
         <>
           <div className="card" style={{ marginTop: 24 }}>
-            <div className="eyebrow">Hook</div>
-            <p style={{ fontFamily: "var(--font-serif)", fontSize: 28, lineHeight: 1.15, margin: "10px 0 0", fontWeight: 500 }}>
-              &ldquo;{brief.storyboard.hook}&rdquo;
-            </p>
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="eyebrow">Hook</div>
+                <p style={{ fontFamily: "var(--font-serif)", fontSize: 28, lineHeight: 1.15, margin: "10px 0 0", fontWeight: 500 }}>
+                  &ldquo;{brief.storyboard.hook}&rdquo;
+                </p>
+              </div>
+              <div className="col" style={{ gap: 6, alignItems: "flex-end", flexShrink: 0 }}>
+                {brief.storyboard.creator_gender && (
+                  <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>
+                    {brief.storyboard.creator_gender === "female" ? "👩 female voice" : brief.storyboard.creator_gender === "male" ? "👨 male voice" : "🧑 non-binary voice"}
+                  </span>
+                )}
+                {brief.storyboard.banner_choice && (
+                  <span className="badge" style={{ background: brief.storyboard.banner_choice === "A" ? "var(--danger-soft)" : "var(--gold-soft)", color: brief.storyboard.banner_choice === "A" ? "var(--danger)" : "var(--gold)", borderColor: "var(--border)" }}>
+                    Banner {brief.storyboard.banner_choice}
+                  </span>
+                )}
+              </div>
+            </div>
             {brief.storyboard.rationale && (
               <div className="muted" style={{ marginTop: 14, maxWidth: 720 }}>{brief.storyboard.rationale}</div>
             )}
