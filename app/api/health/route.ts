@@ -35,8 +35,11 @@ export async function GET() {
       GEMINI_MODEL_RAW: process.env.GEMINI_MODEL ?? null,
       GEMINI_IMAGE_MODEL_RAW: process.env.GEMINI_IMAGE_MODEL ?? null,
       HIGGSFIELD_API_KEY: Boolean(process.env.HIGGSFIELD_API_KEY),
+      OPENROUTER_API_KEY: Boolean(process.env.OPENROUTER_API_KEY),
+      VIDEO_MODEL: process.env.VIDEO_MODEL ?? null,
+      VIDEO_RESOLUTION: process.env.VIDEO_RESOLUTION ?? null,
+      // legacy — kept so settings pages still render until the swap finishes
       FAL_API_KEY: Boolean(process.env.FAL_API_KEY),
-      FAL_VIDEO_MODEL: process.env.FAL_VIDEO_MODEL ?? null,
       RESEND_API_KEY: Boolean(process.env.RESEND_API_KEY),
       RESEND_FROM: process.env.RESEND_FROM ?? null,
       YOUTUBE_API_KEY: Boolean(process.env.YOUTUBE_API_KEY),

@@ -1,6 +1,7 @@
 // POST /api/briefs/:id/render-videos
 //
-// Kicks off fal.ai image-to-video render for every approved frame in parallel.
+// Kicks off OpenRouter → Veo 3.1 Lite image-to-video render for every approved
+// frame in parallel.
 // Each shot's clip URL is stored on the frame (video_url, video_status), and
 // the brief status rolls up to "videos_pending" → "videos_ready" automatically.
 //
@@ -23,8 +24,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!brief.storyboard) return NextResponse.json({ error: "no storyboard" }, { status: 400 });
   if (!brief.frames || brief.frames.length === 0)
     return NextResponse.json({ error: "no frames" }, { status: 400 });
-  if (!process.env.FAL_API_KEY)
-    return NextResponse.json({ error: "FAL_API_KEY not set on the server" }, { status: 500 });
+  if (!process.env.OPENROUTER_API_KEY)
+    return NextResponse.json({ error: "OPENROUTER_API_KEY not set on the server" }, { status: 500 });
 
   // Render only approved frames (so users explicitly gate which shots become video).
   const approved = brief.frames.filter((f) => f.status === "approved" && f.image_url);

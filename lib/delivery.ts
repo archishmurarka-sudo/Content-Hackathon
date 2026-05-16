@@ -104,6 +104,61 @@ export async function sendWhatsAppVideos(input: SendInput): Promise<SendResult> 
   return { message_id: main.message_id, to };
 }
 
+// Frame-only preview — for briefs where the video hasn't rendered yet.
+// Sends a single still image with the brief metadata + handoff URL.
+export type PreviewInput = {
+  to: string;
+  image_url: string;
+  filename?: string;
+  handoff_url: string;
+  caption_lead?: string;
+  meta?: string;            // e.g. "5 shots · 20s · Bottom-of-funnel"
+  cta?: string;             // the storyboard CTA line — shown in italics
+};
+
+export async function sendCreatorPreview(input: PreviewInput): Promise<SendResult> {
+  const key = process.env.PERISKOPE_API_KEY;
+  const from = process.env.PERISKOPE_PHONE;
+  if (!key) throw new Error("PERISKOPE_API_KEY not set");
+  if (!from) throw new Error("PERISKOPE_PHONE not set");
+  if (!input.image_url) throw new Error("image_url required");
+  const to = normalizePhone(input.to);
+  assertRecipientAllowed(to);
+
+  const lead = (input.caption_lead ?? "").trim();
+  const lines = [
+    lead && `*${lead}*`,
+    input.meta && `*${input.meta}*`,
+    input.cta && `CTA: _${input.cta}_`,
+    "",
+    "Frames are ready, video render still pending. Open the brief:",
+    input.handoff_url,
+  ].filter(Boolean);
+
+  const ext = input.image_url.toLowerCase().endsWith(".jpg") || input.image_url.toLowerCase().endsWith(".jpeg")
+    ? "jpg"
+    : input.image_url.toLowerCase().endsWith(".webp")
+    ? "webp"
+    : "png";
+  const mimetype = ext === "jpg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+
+  const result = await postMessage({
+    key,
+    from,
+    body: {
+      chat_id: `${to}@c.us`,
+      message: lines.join("\n"),
+      media: {
+        type: "image",
+        url: input.image_url,
+        filename: input.filename ?? `preview.${ext}`,
+        mimetype,
+      },
+    },
+  });
+  return { message_id: result.message_id, to };
+}
+
 // Single-shot helper for the "creator handoff" flow — sends the stitched
 // final mp4 as one media message with the public handoff URL as the caption.
 export type HandoffInput = {

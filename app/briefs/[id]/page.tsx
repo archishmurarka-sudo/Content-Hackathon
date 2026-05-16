@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useToast } from "@/components/toast";
 
 type Shot = {
   idx: number;
@@ -72,10 +73,21 @@ type ProductInfo = {
   one_liner?: string;
 };
 
+type HealthSnapshot = {
+  env: {
+    OPENROUTER_API_KEY?: boolean;
+    VIDEO_MODEL?: string | null;
+    RESEND_API_KEY?: boolean;
+    R2_CONFIGURED?: boolean;
+  };
+};
+
 export default function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const toast = useToast();
   const [brief, setBrief] = useState<Brief | null>(null);
   const [product, setProduct] = useState<ProductInfo | null>(null);
+  const [health, setHealth] = useState<HealthSnapshot | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [generatingFrames, setGeneratingFrames] = useState(false);
   const [perShotBusy, setPerShotBusy] = useState<Record<number, boolean>>({});
@@ -84,13 +96,19 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
   const [perShotVideoBusy, setPerShotVideoBusy] = useState<Record<number, boolean>>({});
   const [stitching, setStitching] = useState(false);
   const [stitchError, setStitchError] = useState<string | null>(null);
-  const [deliveryChannel, setDeliveryChannel] = useState<"email" | "whatsapp">("email");
+  // WhatsApp is the active delivery channel right now (Periskope is live;
+  // Resend isn't wired on the Railway service yet).
+  const [deliveryChannel, setDeliveryChannel] = useState<"email" | "whatsapp">("whatsapp");
   const [emailTo, setEmailTo] = useState("");
   const [postingNotes, setPostingNotes] = useState("");
   const [phone, setPhone] = useState("");
   const [savedPhoneLoaded, setSavedPhoneLoaded] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // Test-mode allowlist phone — shown as a one-click prefill so the operator
+  // doesn't have to retype the test number. PERISKOPE_TEST_MODE=true on the
+  // Railway service blocks anything else from receiving.
+  const TEST_PHONE = "918017920654";
 
   async function load() {
     const res = await fetch(`/api/briefs/${id}`, { cache: "no-store" });
@@ -103,6 +121,16 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
   }, [id]);
+
+  // Pull /api/health once on mount so we know which downstream stages are wired
+  // (OpenRouter, Resend). Powers the "OpenRouter not configured" disabled state
+  // on the Generate-videos button so the user isn't left clicking a silent button.
+  useEffect(() => {
+    fetch("/api/health", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setHealth(d))
+      .catch(() => {});
+  }, []);
 
   // Once we know which product the brief is for, fetch the product record so
   // we can show the same hero image that's being passed to Gemini as the
@@ -158,12 +186,22 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
 
   async function generateAllVideos() {
     const ready = (brief?.frames ?? []).filter((f) => f.status === "approved");
-    if (ready.length === 0) return;
-    const cost = (ready.length * 0.25).toFixed(2);
-    if (!confirm(`Render ${ready.length} video clip${ready.length === 1 ? "" : "s"} via fal.ai (~$${cost})?`)) return;
+    if (ready.length === 0) {
+      toast.error("No approved frames", "Approve at least one frame before rendering videos.");
+      return;
+    }
+    // Veo 3.1 Lite: $0.05/s × 8s = ~$0.40 per clip at 720p with audio.
+    const cost = (ready.length * 0.40).toFixed(2);
+    if (!confirm(`Render ${ready.length} video clip${ready.length === 1 ? "" : "s"} via OpenRouter → Veo 3.1 Lite (~$${cost} total, audio on)?`)) return;
     setGeneratingVideos(true);
-    await fetch(`/api/briefs/${id}/render-videos`, { method: "POST" });
+    const res = await fetch(`/api/briefs/${id}/render-videos`, { method: "POST" });
     setGeneratingVideos(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast.error("Video render failed", d?.error ?? `HTTP ${res.status}`);
+    } else {
+      toast.success(`Rendering ${ready.length} clip${ready.length === 1 ? "" : "s"}`, "Veo 3.1 Lite is processing — frames will fill in as each finishes.");
+    }
     load();
   }
 
@@ -292,7 +330,7 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
           { label: "Storyboard", sub: "Gemini script" },
           { label: "Frames", sub: "Nano Banana" },
           { label: "Frames ready", sub: "Review + approve" },
-          { label: "Video render", sub: "fal.ai · Kling 2.1" },
+          { label: "Video render", sub: "OpenRouter · Veo 3.1 Lite" },
           { label: "Delivered", sub: "Email · WhatsApp" },
         ].map((step, i) => (
           <div key={i} className={`pipeline-step ${i < stageIdx ? "done" : i === stageIdx ? "active" : ""}`}>
@@ -411,34 +449,44 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
                   <div className="eyebrow" style={{ color: "var(--accent)" }}>All frames approved</div>
                   <p style={{ margin: "6px 0 0", color: "var(--text-2)" }}>
                     {videosReadyCount === 0
-                      ? `Ready to render ${approvedCount} clip${approvedCount === 1 ? "" : "s"} via fal.ai (Kling 2.1).`
+                      ? `Ready to render ${approvedCount} clip${approvedCount === 1 ? "" : "s"} via OpenRouter Veo 3.1 Lite (8s, 720p, audio on).`
                       : videosReadyCount < approvedCount
                         ? `${videosReadyCount}/${approvedCount} clips rendered${videosPendingCount ? ` · ${videosPendingCount} in flight` : ""}.`
                         : `All ${videosReadyCount} clips rendered. Send to creator below.`}
                   </p>
                 </div>
-                <div className="row" style={{ gap: 8 }}>
-                  <button
-                    className="btn-ghost"
-                    onClick={renderNextShot}
-                    disabled={renderingNext || videosPendingCount > 0 || videosReadyCount >= approvedCount}
-                    title="Render the next un-rendered approved frame — useful for testing one shot before paying for the full batch"
-                  >
-                    {renderingNext
-                      ? "Rendering shot…"
-                      : videosReadyCount >= approvedCount
-                        ? "All shots done"
-                        : `Render shot ${videosReadyCount + 1} of ${approvedCount}`}
-                  </button>
-                  <button onClick={generateAllVideos} disabled={generatingVideos || videosPendingCount > 0}>
-                    {generatingVideos || videosPendingCount > 0
-                      ? `Rendering${videosPendingCount ? ` (${videosPendingCount} left)` : "…"}`
-                      : videosReadyCount === 0
-                        ? "Generate all"
-                        : videosReadyCount < approvedCount
-                          ? "Render remaining"
-                          : "Re-render all"}
-                  </button>
+                <div className="col" style={{ gap: 8, alignItems: "flex-end" }}>
+                  {health && !health.env?.OPENROUTER_API_KEY && (
+                    <div className="muted-sm" style={{ color: "var(--gold)", fontSize: 12, textAlign: "right", maxWidth: 280 }}>
+                      ⚠ <strong>OpenRouter not configured.</strong> Add <code className="mono">OPENROUTER_API_KEY</code> in Railway Variables to enable video render.
+                    </div>
+                  )}
+                  <div className="row" style={{ gap: 8 }}>
+                    <button
+                      className="btn-ghost"
+                      onClick={renderNextShot}
+                      disabled={renderingNext || videosPendingCount > 0 || videosReadyCount >= approvedCount || Boolean(health && !health.env?.OPENROUTER_API_KEY)}
+                      title="Render the next un-rendered approved frame — useful for testing one shot before paying for the full batch"
+                    >
+                      {renderingNext
+                        ? "Rendering shot…"
+                        : videosReadyCount >= approvedCount
+                          ? "All shots done"
+                          : `Render shot ${videosReadyCount + 1} of ${approvedCount}`}
+                    </button>
+                    <button
+                      onClick={generateAllVideos}
+                      disabled={generatingVideos || videosPendingCount > 0 || Boolean(health && !health.env?.OPENROUTER_API_KEY)}
+                    >
+                      {generatingVideos || videosPendingCount > 0
+                        ? `Rendering${videosPendingCount ? ` (${videosPendingCount} left)` : "…"}`
+                        : videosReadyCount === 0
+                          ? "Generate all"
+                          : videosReadyCount < approvedCount
+                            ? "Render remaining"
+                            : "Re-render all"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -484,27 +532,74 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
                   </button>
                 </div>
                 {brief.final_video_url && (
-                  <div style={{ marginTop: 14, display: "flex", gap: 14, alignItems: "flex-start" }}>
-                    <video src={brief.final_video_url} controls playsInline style={{ width: 240, aspectRatio: "9/16", borderRadius: 8, background: "#000" }} />
-                    <div className="muted-sm" style={{ flex: 1 }}>
-                      <div>Final cut ready — preview at left.</div>
-                      <a href={brief.final_video_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 8 }}>
-                        Download mp4 →
-                      </a>
+                  <div style={{ marginTop: 14, display: "flex", gap: 16, alignItems: "flex-start" }}>
+                    <video
+                      src={brief.final_video_url}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      style={{ width: 260, aspectRatio: "9/16", borderRadius: 8, background: "#000", objectFit: "contain" }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>Final cut ready</div>
+                      <p className="muted-sm" style={{ marginTop: 4, marginBottom: 14 }}>
+                        Stitched {videosReadyCount} clips into one 9:16 mp4 with overlay text burned in.
+                      </p>
+                      <div className="row" style={{ gap: 8 }}>
+                        <a
+                          href={`${brief.final_video_url}${brief.final_video_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(`${brief.creator_handle}-${brief.product_id}-${brief.target_duration_s}s.mp4`)}`}
+                          download={`${brief.creator_handle}-${brief.product_id}-${brief.target_duration_s}s.mp4`}
+                          style={{
+                            padding: "8px 14px",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            background: "var(--accent)",
+                            color: "var(--bg)",
+                            border: "1px solid var(--accent)",
+                            borderRadius: 4,
+                            textDecoration: "none",
+                          }}
+                        >
+                          ↓ Download mp4
+                        </a>
+                        <a
+                          href={brief.final_video_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            padding: "8px 14px",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            background: "transparent",
+                            color: "var(--text-2)",
+                            border: "1px solid var(--border)",
+                            borderRadius: 4,
+                            textDecoration: "none",
+                          }}
+                        >
+                          ↗ Open in new tab
+                        </a>
+                      </div>
                     </div>
                   </div>
                 )}
                 {stitchError && <p style={{ color: "var(--danger)", marginTop: 10, fontSize: 13 }}>{stitchError}</p>}
               </div>
 
-              {brief.final_video_url && (
+              {(brief.frames?.length ?? 0) > 0 && (
                 <div className="card" style={{ marginTop: 20 }}>
                   <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                     <div style={{ flex: 1 }}>
-                      <span className="eyebrow">Auto-send to creator</span>
-                      <h2 style={{ marginTop: 4 }}>Deliver final cut</h2>
+                      <span className="eyebrow">Send to creator</span>
+                      <h2 style={{ marginTop: 4 }}>
+                        {brief.final_video_url ? "Deliver final cut" : "Send preview"}
+                      </h2>
                       <p className="muted-sm" style={{ marginTop: 6, maxWidth: 540 }}>
-                        Pick channel — email is fastest to set up (Resend), WhatsApp uses Periskope.
+                        {brief.final_video_url
+                          ? "Drops the stitched MP4 in WhatsApp with a download link to the public handoff page."
+                          : (brief.frames?.some((f) => f.video_status === "ready")
+                              ? "Sends the shot clips that are ready, with a download link to the handoff page."
+                              : "Sends a frame preview with the hook + CTA + handoff link — render videos to upgrade to a full delivery.")}
                       </p>
                     </div>
                     {brief.delivery?.status === "sent" && (
@@ -516,15 +611,17 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
 
                   <div className="row" style={{ marginTop: 14, gap: 8 }}>
                     <button
-                      className={deliveryChannel === "email" ? "" : "btn-ghost"}
-                      onClick={() => setDeliveryChannel("email")}
-                      style={{ padding: "6px 14px", fontSize: 13 }}
-                    >Email (Resend)</button>
-                    <button
                       className={deliveryChannel === "whatsapp" ? "" : "btn-ghost"}
                       onClick={() => setDeliveryChannel("whatsapp")}
                       style={{ padding: "6px 14px", fontSize: 13 }}
                     >WhatsApp (Periskope)</button>
+                    <button
+                      className={deliveryChannel === "email" ? "" : "btn-ghost"}
+                      onClick={() => setDeliveryChannel("email")}
+                      style={{ padding: "6px 14px", fontSize: 13 }}
+                      disabled={!brief.final_video_url}
+                      title={brief.final_video_url ? "" : "Email needs the final stitched cut"}
+                    >Email (Resend)</button>
                   </div>
 
                   {deliveryChannel === "email" ? (
@@ -544,14 +641,35 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
                       </div>
                     </>
                   ) : (
-                    <div className="row" style={{ marginTop: 12, gap: 10, alignItems: "flex-end" }}>
-                      <div style={{ flex: 1, minWidth: 220 }}>
-                        <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>Creator phone (country code, no +)</label>
-                        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="14155550123" style={{ width: "100%" }} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 18, marginTop: 12, alignItems: "flex-start" }}>
+                      <div>
+                        <div className="row" style={{ gap: 10, alignItems: "flex-end" }}>
+                          <div style={{ flex: 1, minWidth: 220 }}>
+                            <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>
+                              Creator phone (country code, no +)
+                            </label>
+                            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="14155550123" style={{ width: "100%" }} />
+                          </div>
+                          <button onClick={sendToWhatsApp} disabled={sending || !phone.trim()}>
+                            {sending ? "Sending…" : brief.delivery?.channel === "whatsapp" && brief.delivery.status === "sent" ? "Re-send" : "Send to WhatsApp"}
+                          </button>
+                        </div>
+                        <div className="row" style={{ marginTop: 8, gap: 8, alignItems: "center" }}>
+                          <button
+                            type="button"
+                            className="btn-ghost btn-sm"
+                            onClick={() => setPhone(TEST_PHONE)}
+                            style={{ padding: "4px 10px", fontSize: 11 }}
+                            title="Pre-fill the Periskope test allowlist number (+91 8017920654)"
+                          >Use test number</button>
+                          <span className="muted-sm" style={{ fontSize: 11 }}>
+                            Test mode active — only <code>{TEST_PHONE}</code> receives until <code>PERISKOPE_TEST_MODE=false</code> on Railway.
+                          </span>
+                        </div>
                       </div>
-                      <button onClick={sendToWhatsApp} disabled={sending || !phone.trim()}>
-                        {sending ? "Sending…" : brief.delivery?.channel === "whatsapp" && brief.delivery.status === "sent" ? "Re-send WhatsApp" : "Send to WhatsApp"}
-                      </button>
+
+                      {/* Bot / chat-bubble preview — shows what WhatsApp will render */}
+                      <WhatsAppPreview brief={brief} testPhone={TEST_PHONE} phone={phone} />
                     </div>
                   )}
 
@@ -571,11 +689,18 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
 
 function VideoTile({ frame, busy, onRegen }: { frame: Frame; busy: boolean; onRegen: () => void }) {
   const status = frame.video_status ?? "idle";
+  const downloadName = `shot_${String(frame.shot_idx + 1).padStart(2, "0")}.mp4`;
   return (
     <div className="card" style={{ padding: 10 }}>
       <div style={{ position: "relative", aspectRatio: "9/16", borderRadius: 6, overflow: "hidden", background: "#000" }}>
         {frame.video_url ? (
-          <video src={frame.video_url} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <video
+            src={frame.video_url}
+            controls
+            playsInline
+            preload="metadata"
+            style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+          />
         ) : frame.image_url ? (
           <img src={frame.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.4 }} />
         ) : null}
@@ -599,6 +724,49 @@ function VideoTile({ frame, busy, onRegen }: { frame: Frame; busy: boolean; onRe
           {busy ? "…" : status === "failed" ? "Retry" : "Regen"}
         </button>
       </div>
+
+      {status === "ready" && frame.video_url && (
+        <div className="row" style={{ gap: 6, marginTop: 8 }}>
+          <a
+            href={`${frame.video_url}${frame.video_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(downloadName)}`}
+            download={downloadName}
+            style={{
+              flex: 1,
+              textAlign: "center",
+              padding: "6px 8px",
+              fontSize: 11,
+              fontWeight: 600,
+              background: "var(--accent-soft)",
+              color: "var(--accent)",
+              border: "1px solid var(--accent)",
+              borderRadius: 4,
+              textDecoration: "none",
+            }}
+          >
+            ↓ Download
+          </a>
+          <a
+            href={frame.video_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              flex: 1,
+              textAlign: "center",
+              padding: "6px 8px",
+              fontSize: 11,
+              fontWeight: 600,
+              background: "transparent",
+              color: "var(--text-2)",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              textDecoration: "none",
+            }}
+          >
+            ↗ Open
+          </a>
+        </div>
+      )}
+
       {frame.video_error && (
         <p style={{ color: "#ff6b6b", fontSize: 11, marginTop: 6 }}>{frame.video_error}</p>
       )}

@@ -21,7 +21,7 @@ const REQUIRED: Array<{ key: string; label: string; setup: string }> = [
 ];
 
 const OPTIONAL: Array<{ key: string; label: string; setup: string; what: string }> = [
-  { key: "FAL_API_KEY", label: "fal.ai (video render)", setup: "https://fal.ai/dashboard/keys", what: "Kling 2.1 image→video. ~$0.25 per clip." },
+  { key: "OPENROUTER_API_KEY", label: "OpenRouter (video render)", setup: "https://openrouter.ai/keys", what: "Routes to Google Veo 3.1 Lite — native audio + image-to-video at $0.05/sec (~$0.40 per 8s clip)." },
   { key: "RESEND_API_KEY", label: "Resend (email delivery)", setup: "https://resend.com/api-keys", what: "Free 100/day. Sends final video link to creator." },
   { key: "YOUTUBE_API_KEY", label: "YouTube Data API (reference ingest)", setup: "https://console.cloud.google.com/apis/credentials", what: "Lets you paste a YouTube URL as additional storyboard inspiration." },
   { key: "APIFY_TOKEN", label: "Apify (TikTok scrape)", setup: "https://console.apify.com/account/integrations", what: "Powers the 'Onboard new creator' flow on /creators." },
@@ -69,7 +69,7 @@ export default function SettingsPage() {
         <div className="row" style={{ marginTop: 10, gap: 24 }}>
           <KV label="Storyboard (text)" value={health?.resolved?.gemini_text_model ?? "—"} />
           <KV label="Frame image" value={health?.resolved?.gemini_image_model ?? "—"} />
-          <KV label="Video render" value={health?.env?.FAL_VIDEO_MODEL ?? "fal-ai/kling-video/v2.1/standard/image-to-video"} />
+          <KV label="Video render" value={health?.env?.VIDEO_MODEL ?? "google/veo-3.1-lite"} />
         </div>
       </div>
 

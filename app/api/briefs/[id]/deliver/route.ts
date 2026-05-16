@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBrief, setDelivery } from "@/lib/briefs";
 import {
   sendCreatorHandoff,
+  sendCreatorPreview,
   sendWhatsAppVideos,
   getCreatorPhone,
   setCreatorPhone,
@@ -70,15 +71,55 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  // Fallback: per-shot send. Used when there's no stitched mp4 yet, or the
-  // operator explicitly asked for the per-shot mode.
-  const ready = brief.frames
+  // Fallback chain: per-shot video clips → first frame image preview.
+  // This lets the operator deliver a "what's been built so far" preview
+  // even when the OpenRouter / fal render hasn't run yet.
+  const readyVideos = brief.frames
     .filter((f) => f.video_status === "ready" && f.video_url)
     .sort((a, b) => a.shot_idx - b.shot_idx);
-  if (ready.length === 0) {
-    return NextResponse.json({ error: "no rendered video clips to send" }, { status: 400 });
+
+  if (readyVideos.length === 0) {
+    // Frame-image preview path
+    const readyFrames = brief.frames
+      .filter((f) => f.status === "ready" && f.image_url)
+      .sort((a, b) => a.shot_idx - b.shot_idx);
+    if (readyFrames.length === 0) {
+      return NextResponse.json({ error: "no frames or videos ready to send" }, { status: 400 });
+    }
+    const lead = readyFrames[0];
+    const handoff_url = `${origin}/handoff/${brief.id}`;
+    const meta = `${brief.storyboard?.shots?.length ?? brief.frames.length} shots · ${brief.target_duration_s}s · ${funnelLabel(brief)}`;
+    const captionLead = brief.storyboard?.hook ?? `Your @${brief.creator_handle} brief`;
+    try {
+      const res = await sendCreatorPreview({
+        to: phone,
+        image_url: absolutize(origin, lead.image_url!),
+        filename: `${brief.creator_handle}-${brief.product_id}-shot1.png`,
+        handoff_url,
+        caption_lead: captionLead,
+        meta,
+        cta: brief.storyboard?.cta,
+      });
+      await setDelivery(id, {
+        status: "sent",
+        channel: "whatsapp",
+        to: res.to,
+        message_id: res.message_id,
+        sent_at: Date.now(),
+      });
+      return NextResponse.json({ ...(await getBrief(id)), handoff_url });
+    } catch (err: any) {
+      await setDelivery(id, {
+        status: "failed",
+        channel: "whatsapp",
+        to: phone,
+        error: err?.message ?? "send failed",
+      });
+      return NextResponse.json({ error: err?.message ?? "send failed" }, { status: 502 });
+    }
   }
-  const mediaUrls = ready.map((f) => absolutize(origin, f.video_url!));
+
+  const mediaUrls = readyVideos.map((f) => absolutize(origin, f.video_url!));
   const caption = buildShotCaption(brief, origin);
   try {
     const res = await sendWhatsAppVideos({ to: phone, media_urls: mediaUrls, caption });
@@ -104,6 +145,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 function buildShotCaption(brief: any, origin: string): string {
   const hook = brief.storyboard?.hook ? `"${brief.storyboard.hook}"\n\n` : "";
   return `${hook}New short for @${brief.creator_handle} — ${brief.storyboard?.shots?.length ?? brief.frames.length} shots, ${brief.target_duration_s}s. Full brief: ${origin}/handoff/${brief.id}`;
+}
+
+function funnelLabel(brief: any): string {
+  // The storyboard CTA hints at the funnel stage. Cheap heuristic, used for
+  // the WhatsApp caption metadata.
+  const cta = (brief.storyboard?.cta ?? "").toLowerCase();
+  if (/(\bbuy\b|cart|deal|sale|today|tonight)/.test(cta)) return "Bottom-of-funnel";
+  if (/(link in bio|see why|learn|why i)/.test(cta)) return "Middle-of-funnel";
+  return "Top-of-funnel";
 }
 
 function absoluteOrigin(req: NextRequest): string {
