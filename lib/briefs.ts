@@ -4,10 +4,23 @@ export type BriefStatus =
   | "generating_storyboard"
   | "storyboard_ready"
   | "frames_pending"
+  | "frames_ready"
   | "frames_approved"
   | "videos_pending"
   | "delivered"
   | "failed";
+
+export type FrameStatus = "pending" | "ready" | "approved" | "failed";
+
+export type Frame = {
+  shot_idx: number;
+  status: FrameStatus;
+  image_url?: string;
+  image_key?: string;
+  prompt: string;
+  error?: string;
+  updated_at: number;
+};
 
 export type Brief = {
   id: string;
@@ -16,6 +29,7 @@ export type Brief = {
   target_duration_s: number;
   status: BriefStatus;
   storyboard?: Storyboard;
+  frames?: Frame[];
   error?: string;
   created_at: number;
   updated_at: number;
@@ -80,5 +94,33 @@ export function patchShot(id: string, shotIdx: number, patch: Partial<NonNullabl
   if (!shot) return;
   b.storyboard.shots[shotIdx] = { ...shot, ...patch };
   b.updated_at = Date.now();
+  store.set(id, b);
+}
+
+export function initFrames(id: string) {
+  const b = store.get(id);
+  if (!b?.storyboard) return;
+  b.frames = b.storyboard.shots.map((s) => ({
+    shot_idx: s.idx,
+    status: "pending" as FrameStatus,
+    prompt: s.image_prompt,
+    updated_at: Date.now(),
+  }));
+  b.status = "frames_pending";
+  b.updated_at = Date.now();
+  store.set(id, b);
+}
+
+export function setFrame(id: string, shot_idx: number, patch: Partial<Frame>) {
+  const b = store.get(id);
+  if (!b?.frames) return;
+  const i = b.frames.findIndex((f) => f.shot_idx === shot_idx);
+  if (i < 0) return;
+  b.frames[i] = { ...b.frames[i], ...patch, updated_at: Date.now() };
+  b.updated_at = Date.now();
+  // Roll up status
+  if (b.frames.every((f) => f.status === "approved")) b.status = "frames_approved";
+  else if (b.frames.every((f) => f.status === "ready" || f.status === "approved")) b.status = "frames_ready";
+  else if (b.frames.some((f) => f.status === "pending")) b.status = "frames_pending";
   store.set(id, b);
 }
