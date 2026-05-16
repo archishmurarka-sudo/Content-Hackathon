@@ -29,6 +29,7 @@ export type EventType =
   | "video.render_started"
   | "video.render_completed"
   | "video.render_failed"
+  | "video.uploaded"
   // stitch
   | "stitch.completed"
   | "stitch.failed"
