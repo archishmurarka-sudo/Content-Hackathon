@@ -203,14 +203,146 @@ export function rankPrototypes(opts: {
   return scored;
 }
 
-export const PRODUCTS = [
-  { id: "ashwamag", name: "Mag Ashwa Gummies", brand: "Root Labs",
+export type Product = {
+  id: string;
+  name: string;
+  brand: string;
+  one_liner: string;
+  pain_anchors: string[];
+  hero_image_url?: string | null;
+  format?: string;                  // "Gummy", "Roll-on", "Capsule" etc.
+  key_ingredients?: string[];
+  delivery_tech?: string;           // e.g. "Beadlet delivery"
+  price_band?: string;              // e.g. "$40–80 per bottle"
+  channel?: string;                 // e.g. "TikTok Shop"
+  audience_primary?: string;
+  audience_secondary?: string;
+  pain_breakdown?: { pain: string; gmv_label?: string; note?: string }[];
+  consumer_quotes?: string[];       // verbatim Reddit/Amazon language
+  source?: "builtin" | "user";
+};
+
+export const PRODUCTS: Product[] = [
+  {
+    id: "ashwamag",
+    name: "Mag Ashwa Gummies",
+    brand: "Root Labs",
     one_liner: "Magnesium glycinate + KSM-66 ashwagandha gummies, beadlet delivery, for sleep / stress / energy.",
-    pain_anchors: ["sleep", "stress_cortisol", "energy", "brain_fog", "anxiety_calm"] },
-  { id: "alpha", name: "Alpha Shilajit Gummies", brand: "Root Labs",
+    pain_anchors: ["sleep", "stress_cortisol", "energy", "brain_fog", "anxiety_calm"],
+    format: "Gummy (chewable)",
+    key_ingredients: ["Magnesium glycinate", "KSM-66 ashwagandha"],
+    delivery_tech: "Beadlet delivery — protects magnesium through digestion for better absorption",
+    price_band: "$40–80 per bottle (varies by bundle)",
+    channel: "TikTok Shop (orange cart / link in bio)",
+    audience_primary: "Women 25–45",
+    audience_secondary: "Health-conscious adults, fitness enthusiasts, stressed professionals",
+    pain_breakdown: [
+      { pain: "Sleep", gmv_label: "$860K", note: "trouble sleeping, melatonin alternatives, sleep quality" },
+      { pain: "Brain fog", gmv_label: "$418K", note: "can't focus, mental clarity, cognitive function" },
+      { pain: "Energy", gmv_label: "$319K", note: "always tired, afternoon crashes, sustainable energy" },
+      { pain: "Stress / cortisol", gmv_label: "$279K", note: "chronic stress, cortisol management, nervous system" },
+      { pain: "General wellness", gmv_label: "$185K", note: "magnesium deficiency, daily health, micronutrients" },
+      { pain: "Muscle recovery", gmv_label: "$16K", note: "post-workout, cramps, athletic performance" },
+      { pain: "Anxiety / calm", note: "overstimulation, can't wind down, mind racing" },
+    ],
+    consumer_quotes: [
+      "Tired of needing something every night just to fall asleep",
+      "Perimenopause wrecked my sleep",
+      "Stopped melatonin, wanted something more natural",
+      "Stress burns through your magnesium faster than your diet can replace it",
+      "Everything changed at 37",
+    ],
+    source: "builtin",
+  },
+  {
+    id: "alpha",
+    name: "Alpha Shilajit Gummies",
+    brand: "Root Labs",
     one_liner: "Shilajit gummies for testosterone / energy / drive.",
-    pain_anchors: ["testosterone", "energy", "stamina"] },
-  { id: "hgr", name: "Hair Growth Roll-On", brand: "Be Bodywise",
+    pain_anchors: ["testosterone", "energy", "stamina"],
+    format: "Gummy (chewable)",
+    key_ingredients: ["Shilajit (purified resin)"],
+    audience_primary: "Men 25–50",
+    audience_secondary: "Fitness enthusiasts, men noticing energy / drive decline",
+    pain_breakdown: [
+      { pain: "Testosterone", note: "declining T with age, performance, drive" },
+      { pain: "Energy", note: "afternoon crashes, sustained energy" },
+      { pain: "Stamina", note: "endurance, recovery, gym performance" },
+    ],
+    consumer_quotes: [
+      "Feeling sluggish after 35",
+      "Wanted something that wasn't a TRT clinic",
+    ],
+    channel: "TikTok Shop",
+    source: "builtin",
+  },
+  {
+    id: "hgr",
+    name: "Hair Growth Roll-On",
+    brand: "Be Bodywise",
     one_liner: "Topical roll-on for hair regrowth, thinning, receding.",
-    pain_anchors: ["hair_thinning", "receding_hairline", "slow_growth"] },
+    pain_anchors: ["hair_thinning", "receding_hairline", "slow_growth"],
+    format: "Topical roll-on",
+    audience_primary: "Adults 22–45 with thinning or receding hair",
+    pain_breakdown: [
+      { pain: "Hair thinning", note: "visible scalp, density loss" },
+      { pain: "Receding hairline", note: "temple recession, hairline anxiety" },
+      { pain: "Slow growth", note: "growth-stalled, breakage, postpartum" },
+    ],
+    consumer_quotes: [
+      "I'm 28 and my hairline is already going",
+      "I tried minoxidil and didn't want the side effects",
+    ],
+    channel: "TikTok Shop",
+    source: "builtin",
+  },
 ];
+
+// ---------- runtime-added products (persisted) ----------
+
+const gProd = globalThis as unknown as {
+  __products_added?: Map<string, Product>;
+  __productsLoaded?: Promise<void>;
+};
+
+export async function ensureProductsLoaded(): Promise<void> {
+  if (!hasDb()) return;
+  if (gProd.__productsLoaded) return gProd.__productsLoaded;
+  gProd.__productsLoaded = (async () => {
+    await ensureSchema();
+    const rows = await sql()`SELECT data FROM products_added ORDER BY created_at`;
+    if (!gProd.__products_added) gProd.__products_added = new Map();
+    for (const r of rows) {
+      const p = r.data as Product;
+      gProd.__products_added.set(p.id, p);
+    }
+  })();
+  return gProd.__productsLoaded;
+}
+
+export function getAllProducts(): Product[] {
+  const added = gProd.__products_added ? Array.from(gProd.__products_added.values()) : [];
+  // User-added products surface first so the most recent additions are easy to find.
+  return [...added, ...PRODUCTS];
+}
+
+export function findProduct(id: string): Product | undefined {
+  const norm = id.toLowerCase();
+  return getAllProducts().find((p) => p.id.toLowerCase() === norm);
+}
+
+export async function addProduct(p: Product): Promise<Product> {
+  if (!gProd.__products_added) gProd.__products_added = new Map();
+  const enriched: Product = { ...p, source: "user" };
+  gProd.__products_added.set(p.id, enriched);
+  if (hasDb()) {
+    await ensureSchema();
+    const s = sql();
+    await s`
+      INSERT INTO products_added (id, data, created_at)
+      VALUES (${p.id}, ${s.json(enriched)}, ${Date.now()})
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+    `;
+  }
+  return enriched;
+}

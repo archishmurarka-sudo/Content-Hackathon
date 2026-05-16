@@ -71,6 +71,15 @@ export async function ensureSchema(): Promise<void> {
       );
     `;
     await s`CREATE INDEX IF NOT EXISTS creators_added_created_at_idx ON creators_added (created_at DESC);`;
+    // User-added products. Built-in PRODUCTS array still lives in lib/data.ts.
+    await s`
+      CREATE TABLE IF NOT EXISTS products_added (
+        id TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        created_at BIGINT NOT NULL
+      );
+    `;
+    await s`CREATE INDEX IF NOT EXISTS products_added_created_at_idx ON products_added (created_at DESC);`;
   })();
   return g.__schemaReady;
 }
