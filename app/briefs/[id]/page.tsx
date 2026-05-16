@@ -516,8 +516,9 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
             </section>
           )}
 
-          {allVideosReady && (
+          {(brief.frames?.length ?? 0) > 0 && (
             <>
+              {allVideosReady && (
               <div className="card" style={{ marginTop: 24 }}>
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                   <div style={{ flex: 1 }}>
@@ -585,6 +586,7 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
                 )}
                 {stitchError && <p style={{ color: "var(--danger)", marginTop: 10, fontSize: 13 }}>{stitchError}</p>}
               </div>
+              )}
 
               {(brief.frames?.length ?? 0) > 0 && (
                 <div className="card" style={{ marginTop: 20 }}>
