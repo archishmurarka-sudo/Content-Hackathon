@@ -124,44 +124,83 @@ Description: ${(youtubeRef.description ?? "").slice(0, 400)}`
     : ""
 }
 
-REQUIREMENTS
-- Total duration: ${target_s} seconds (±2s).
-- 4 to 6 shots.
+HARDCODED FORMAT — LOCKED, DO NOT DEVIATE
+This is a BOTTOM-OF-FUNNEL TikTok Shop video. You MUST produce exactly TWO shots, 8 seconds each (16s total). No exceptions, no extra shots, no shorter clips.
+
+SHOT 1 — Hook + Product Reveal (8s)
+- A casual hand enters frame from the right and confidently brings the product to the camera lens, stopping mid-frame with the label dead-on to the camera and fully readable. Hand holds it still for a beat, then slowly rotates ~30° to one side to reveal the side panel of the label, then returns to dead-on.
+- Setting: bright, clean, naturally-lit interior matched to the creator's archetype.
+- Voiceover (delivered in this creator's voice, energy ${creator.energy_rating ?? 7}/10, ~20 words):
+  hook line + product name + key actives.
+- Banner is pinned across the upper third of the frame for the full 8s (see BANNER below).
+
+SHOT 2 — Extended Hand-with-Product + CTA Gesture (8s)
+- Same hand, same product, same setting, same lighting, same banner — visual continuity from shot 1.
+- NO application. NO demo. NO product touching skin/scalp/hair. NO cap removal. The hand simply holds the product label-forward the whole time.
+- Beat 0–4s: hand holds product centered, subtle tilt side-to-side.
+- Beat 4–8s: a SECOND hand enters from the bottom right and points firmly downward toward the very bottom of the frame, indicating the TikTok Shop cart. Primary hand keeps holding the product label-forward.
+- Voiceover (same voice as shot 1, ~15 words): structure/function benefit + hard CTA.
+- Same banner pinned for the full 8s, identical to shot 1.
+
+BANNER (LOCKED — pick ONE, identical across both shots)
+Banner A (use when the concept references a specific discount %):
+  TOP pill — solid coral-red, BOLD WHITE all-caps: "FLASH SALE"
+  BOTTOM pill — solid white, BOLD BLACK mixed-case: "Save up to 30% off"
+Banner B (default — use when no specific % mentioned):
+  TOP pill — solid white, BOLD BLACK all-caps: "🚨 PRICE DROP 🚨" (red siren-light emojis flanking the text)
+  BOTTOM pill — solid coral-red, BOLD WHITE sentence-case: "Limited time sale!"
+
+COMPLIANCE (HARD FAIL if violated — keep speech compliant from the start)
+- Banned words: cures, treats, prevents, heals, guaranteed, 100% effective, weight loss, metabolism, GLP-1, GLP, Ozempic, anxiety (as a condition), depression, insomnia.
+- "Cortisol" is ONLY allowed inside the exact phrase "supports healthy cortisol levels."
+- Required CTA wording: one of "click the orange shopping cart", "tap the orange cart", or "linked in shop below". Do NOT say "click the link in bio", DM, WhatsApp, external sites, or QR codes.
+- Use structure/function language only ("supports healthy …", "helps with …", "may support …"). Never claim a cure or guaranteed outcome.
+
+CTA gesture lock
+- The CTA must be the spoken second-hand-pointing-down-at-the-cart moment in shot 2.
 - ${funnel.cta}
-- Speech matches THIS creator's voice (energy ${creator.energy_rating ?? 7}/10, archetype ${creator.archetype}).
-- Each shot needs: speech (≤25 words), speech_tone, visual description, on-screen overlay text, product_action, transition.
-- For each shot ALSO write:
-  - image_prompt: a vivid 1–2 sentence description for an AI image model to render the opening frame (lighting, framing, color, props, person POV).
-  - video_prompt: a 1–2 sentence motion description for an AI video model (what moves, camera, energy).
-- Hook in first 2 seconds.
 
-NARRATIVE CONTINUITY (adapted from StoryGen-Atelier's storyboard prompt — Apache-2.0)
-1. Continuous Story Arc — shots form a single, unbroken chronological narrative. No disconnected scenes.
-   - First 25%: scene-set, introduce the hero subject.
-   - Middle 50%: the action / change / transformation.
-   - Final 25%: resolution + hard CTA.
-2. Visual Consistency — define a single Hero Subject (this creator's on-camera persona OR the product) and keep their appearance, lighting, palette and wardrobe consistent across consecutive shots.
-3. Seamless Flow — each shot continues IMMEDIATELY from where the previous ended. No teleports. The "visual" line should reference what carried over from the prior shot.
-4. Causal Relationship — every shot is a logical consequence of the previous one. The "speech" line should make the cause-and-effect obvious.
+OUTPUT FORMAT — pure JSON, no markdown fences, no commentary. The "shots" array MUST have exactly 2 entries, each with duration_s: 8.
 
-OUTPUT FORMAT — pure JSON, no markdown fences, no commentary:
+For each shot the "image_prompt" must be a single self-contained paragraph (~150–250 words) ready to paste into Gemini Nano Banana — it must include:
+  • portrait 9:16, 8-second still-frame UGC aesthetic
+  • the exact hand-with-product choreography for that shot
+  • the setting (creator-matched)
+  • the BANNER block verbatim (pill colors, text, positioning)
+  • "PRODUCT LOCK" hard constraint paragraph appended at the end (use the canonical wording in the system context — packaging must match the attached reference image exactly).
+
+For each shot the "video_prompt" must be the same self-contained paragraph but in motion terms (rotation, second hand entering, micro-movement) — ready for Veo 3.1 / Kling / image-to-video.
+
 {
-  "hook": "first-3-words-style hook line",
-  "cta": "the closing CTA sentence",
-  "rationale": "2 sentences: why this script will work for THIS creator",
+  "hook": "first 3-words-style hook line",
+  "cta": "the exact closing CTA spoken in shot 2",
+  "banner_choice": "A" | "B",
+  "rationale": "2 sentences: why this script will work for THIS creator + this product",
   "inspired_by_video_ids": ["<videoId1>", "<videoId2>"],
   "shots": [
     {
       "idx": 0,
-      "duration_s": 4,
-      "speech": "...",
-      "speech_tone": "urgent|conversational|excited|...",
-      "visual": "...",
-      "overlay": "...",
-      "product_action": "on display|close-up|in-use|unboxing|none",
-      "transition": "hard_cut|whip_pan|match_cut|none",
-      "image_prompt": "...",
-      "video_prompt": "..."
+      "duration_s": 8,
+      "speech": "hook + product name + actives, ~20 words",
+      "speech_tone": "confident|urgent|conversational|excited",
+      "visual": "shot-1 hand brings product to camera with label dead-on then rotates ~30° and returns",
+      "overlay": "Banner A or B text, two pills, pinned upper third",
+      "product_action": "close-up",
+      "transition": "hard_cut",
+      "image_prompt": "<single paragraph as specified above>",
+      "video_prompt": "<single paragraph as specified above>"
+    },
+    {
+      "idx": 1,
+      "duration_s": 8,
+      "speech": "structure/function benefit + hard CTA, ~15 words",
+      "speech_tone": "confident|urgent",
+      "visual": "shot-2 extended hand-with-product, second hand enters at 4s pointing down to cart",
+      "overlay": "same banner as shot 1, identical",
+      "product_action": "on display",
+      "transition": "none",
+      "image_prompt": "<single paragraph as specified above>",
+      "video_prompt": "<single paragraph as specified above>"
     }
   ]
 }`;
@@ -222,15 +261,19 @@ export async function generateStoryboard(opts: {
     parsed = JSON.parse(cleaned);
   }
 
-  const shots: StoryboardShot[] = (parsed.shots ?? []).map((s: any, i: number) => ({
+  // Hardcoded BOF model: exactly 2 shots × 8s. Trim/pad defensively so a
+  // drift in the model output can't break the downstream pipeline.
+  const rawShots: any[] = Array.isArray(parsed.shots) ? parsed.shots.slice(0, 2) : [];
+  while (rawShots.length < 2) rawShots.push({});
+  const shots: StoryboardShot[] = rawShots.map((s: any, i: number) => ({
     idx: i,
-    duration_s: Number(s.duration_s) || 4,
+    duration_s: 8,
     speech: String(s.speech ?? ""),
-    speech_tone: String(s.speech_tone ?? "conversational"),
+    speech_tone: String(s.speech_tone ?? (i === 0 ? "confident" : "urgent")),
     visual: String(s.visual ?? ""),
     overlay: String(s.overlay ?? ""),
-    product_action: String(s.product_action ?? "on display"),
-    transition: String(s.transition ?? "hard_cut"),
+    product_action: String(s.product_action ?? (i === 0 ? "close-up" : "on display")),
+    transition: String(s.transition ?? (i === 0 ? "hard_cut" : "none")),
     image_prompt: String(s.image_prompt ?? s.visual ?? ""),
     video_prompt: String(s.video_prompt ?? s.visual ?? ""),
   }));

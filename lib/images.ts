@@ -119,30 +119,26 @@ function buildFramePrompt(o: FrameGenContext): string {
   const aspect = o.aspect_ratio ?? "9:16";
   const lines: string[] = [];
 
-  lines.push(`Vertical ${aspect} photo — a single still frame from a real short-form TikTok Shop video.`);
-  lines.push(`Aesthetic: smartphone-shot UGC, handheld, natural daylight or warm interior light, slightly imperfect framing, NOT a polished studio ad.`);
-  lines.push(`Composition: subject and product clearly visible, eye-level, modern home / kitchen / bathroom / bedroom setting.`);
+  lines.push(`Portrait ${aspect} vertical photo — a single still frame from a naturalistic UGC TikTok Shop ad. Mobile-shot feel, no cinematic gloss, smartphone-shot aesthetic. NOT a polished studio ad.`);
+  lines.push(`Composition: subject and product clearly visible, eye-level, modern home / kitchen / bathroom / bedroom setting matched to the creator's archetype.`);
   if (o.creator_handle || o.creator_archetype) {
     lines.push(`Persona: this is the content style of @${o.creator_handle ?? "unknown"} — a ${o.creator_archetype ?? "wellness creator"}. Match that vibe.`);
   }
   if (o.product_label) {
     lines.push(`Product on screen: ${o.product_label}. The actual product must be visible and recognizable.`);
   }
-  if (o.product_hero_url) {
-    lines.push(`PRODUCT REFERENCE: see the attached image. Render the product in this exact packaging — label, color, shape, proportions must match. Do not invent a different bottle / pouch / applicator.`);
-  }
   if (o.shot_product_action) {
-    lines.push(`Product action this shot: ${o.shot_product_action} (e.g. on a counter, held in hand, close-up, unboxing).`);
+    lines.push(`Product action this shot: ${o.shot_product_action} (e.g. on a counter, held in hand, close-up).`);
   }
 
   lines.push("");
   lines.push("STRICT RULES");
-  lines.push("- DO NOT render any text, captions, overlays, watermarks, app UI, or 'TikTok' branding in the image — overlays are added in post.");
+  lines.push("- DO NOT render any text, captions, overlays, watermarks, app UI, or 'TikTok' branding in the image — overlay banners are added in post.");
   lines.push("- DO NOT add logos other than the actual product label.");
   lines.push("- DO NOT use AI-art, illustration, anime, or 3D render styles — this must look like a phone photo.");
 
   if (o.shot_overlay) {
-    lines.push(`(Note: the post will later overlay the text "${o.shot_overlay}" on top of this image — leave clean negative space at the top for it, but DO NOT draw the text yourself.)`);
+    lines.push(`(Note: the post will later overlay the text "${o.shot_overlay}" on top of this image — leave clean negative space in the upper third for it, but DO NOT draw the text yourself.)`);
   }
 
   lines.push("");
@@ -158,6 +154,12 @@ function buildFramePrompt(o: FrameGenContext): string {
     lines.push("");
     lines.push("USER FEEDBACK ON THE PREVIOUS RENDER — APPLY THESE CHANGES");
     lines.push(o.feedback);
+  }
+
+  // Product LOCK paragraph — verbatim from the BOF model handover doc.
+  if (o.product_hero_url) {
+    lines.push("");
+    lines.push("PRODUCT LOCK (HARD CONSTRAINT — DO NOT IGNORE): the attached product reference image is the ONE AND ONLY canonical version of the product. Every frame must show the bottle, label artwork, branding, typography, colors, shape, cap, applicator, dimensions, and all packaging details IDENTICAL to the reference image. Do not modify, restyle, recolor, redesign, re-text, swap, substitute, or invent any variation of the product. If you cannot match the reference exactly, render less detail rather than guessing. The product must remain visually consistent across all clips of this concept — same bottle, same label, same orientation logic.");
   }
 
   return lines.join("\n");

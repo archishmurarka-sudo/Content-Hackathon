@@ -80,6 +80,7 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
   const [generatingFrames, setGeneratingFrames] = useState(false);
   const [perShotBusy, setPerShotBusy] = useState<Record<number, boolean>>({});
   const [generatingVideos, setGeneratingVideos] = useState(false);
+  const [renderingNext, setRenderingNext] = useState(false);
   const [perShotVideoBusy, setPerShotVideoBusy] = useState<Record<number, boolean>>({});
   const [stitching, setStitching] = useState(false);
   const [stitchError, setStitchError] = useState<string | null>(null);
@@ -163,6 +164,20 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     setGeneratingVideos(true);
     await fetch(`/api/briefs/${id}/render-videos`, { method: "POST" });
     setGeneratingVideos(false);
+    load();
+  }
+
+  // Render the next approved frame that doesn't yet have a video clip.
+  // Useful for one-by-one testing — cheaper to validate shot 1 before
+  // committing to the full batch.
+  async function renderNextShot() {
+    const next = (brief?.frames ?? [])
+      .filter((f) => f.status === "approved" && f.video_status !== "ready" && f.video_status !== "pending")
+      .sort((a, b) => a.shot_idx - b.shot_idx)[0];
+    if (!next) return;
+    setRenderingNext(true);
+    await fetch(`/api/briefs/${id}/videos/${next.shot_idx}`, { method: "POST" });
+    setRenderingNext(false);
     load();
   }
 
@@ -402,15 +417,29 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
                         : `All ${videosReadyCount} clips rendered. Send to creator below.`}
                   </p>
                 </div>
-                <button onClick={generateAllVideos} disabled={generatingVideos || videosPendingCount > 0}>
-                  {generatingVideos || videosPendingCount > 0
-                    ? `Rendering${videosPendingCount ? ` (${videosPendingCount} left)` : "…"}`
-                    : videosReadyCount === 0
-                      ? "Generate videos"
-                      : videosReadyCount < approvedCount
-                        ? "Render remaining"
-                        : "Re-render all"}
-                </button>
+                <div className="row" style={{ gap: 8 }}>
+                  <button
+                    className="btn-ghost"
+                    onClick={renderNextShot}
+                    disabled={renderingNext || videosPendingCount > 0 || videosReadyCount >= approvedCount}
+                    title="Render the next un-rendered approved frame — useful for testing one shot before paying for the full batch"
+                  >
+                    {renderingNext
+                      ? "Rendering shot…"
+                      : videosReadyCount >= approvedCount
+                        ? "All shots done"
+                        : `Render shot ${videosReadyCount + 1} of ${approvedCount}`}
+                  </button>
+                  <button onClick={generateAllVideos} disabled={generatingVideos || videosPendingCount > 0}>
+                    {generatingVideos || videosPendingCount > 0
+                      ? `Rendering${videosPendingCount ? ` (${videosPendingCount} left)` : "…"}`
+                      : videosReadyCount === 0
+                        ? "Generate all"
+                        : videosReadyCount < approvedCount
+                          ? "Render remaining"
+                          : "Re-render all"}
+                  </button>
+                </div>
               </div>
             </div>
           )}

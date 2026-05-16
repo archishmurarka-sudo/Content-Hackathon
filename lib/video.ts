@@ -113,14 +113,140 @@ export async function fetchJobResult(job: VideoJob): Promise<{ video_url: string
 }
 
 // One-shot helper: start → poll → download → store in R2.
-// Used by the API route which itself runs inside a Next.js Node handler (maxDuration ≥ 300).
+// Routes to OpenRouter (Veo 3.1 + others) when VIDEO_PROVIDER=openrouter,
+// otherwise falls back to fal.ai (Kling / Luma / etc).
 export async function renderShotVideoAndStore(opts: VideoGenContext): Promise<VideoResult> {
+  const provider = (process.env.VIDEO_PROVIDER ?? "fal").toLowerCase();
+  if (provider === "openrouter") {
+    const result = await renderViaOpenRouter(opts);
+    bump("video_render");
+    // OpenRouter's renderer already stored the bytes when it had to use the
+    // authenticated download path — in that case `already_stored` is true
+    // and we just pass through the stored URL/key.
+    if (result.already_stored) {
+      return { url: result.video_url, key: result.stored_key!, duration_s: result.duration_s, model: result.model };
+    }
+    const stored = await downloadAndStore(result.video_url, opts.brief_id, opts.shot_idx);
+    return { ...stored, duration_s: result.duration_s, model: result.model };
+  }
   const job = await startVideoJob(opts);
   const result = await pollUntilDone(job, { timeoutMs: 5 * 60 * 1000, intervalMs: 4000 });
   bump("video_render");
-  // Re-host the mp4 in our own storage so the public URL doesn't expire.
   const stored = await downloadAndStore(result.video_url, opts.brief_id, opts.shot_idx);
   return { ...stored, duration_s: result.duration_s, model: job.model };
+}
+
+// ---- OpenRouter provider ----
+//
+// Endpoint:   POST   https://openrouter.ai/api/v1/videos
+// Poll:       GET    https://openrouter.ai/api/v1/videos/{id}
+// Download:   GET    https://openrouter.ai/api/v1/videos/{id}/content?index=0
+//
+// We default to google/veo-3.1-fast because it's the cheapest Veo tier that
+// includes native synchronized audio (~$0.10/sec). Set OPENROUTER_VIDEO_MODEL
+// to swap (google/veo-3.1, google/veo-3.1-lite, openai/sora-2-pro, etc.).
+
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+const OPENROUTER_DEFAULT_MODEL = process.env.OPENROUTER_VIDEO_MODEL || "google/veo-3.1-fast";
+
+type OpenRouterResult = {
+  video_url: string;
+  duration_s: number;
+  model: string;
+  already_stored?: boolean;
+  stored_key?: string;
+};
+
+async function renderViaOpenRouter(opts: VideoGenContext): Promise<OpenRouterResult> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("OPENROUTER_API_KEY not set");
+  const model = OPENROUTER_DEFAULT_MODEL;
+
+  const body: any = {
+    model,
+    prompt: opts.prompt,
+    resolution: "1080p",
+    aspect_ratio: opts.aspect_ratio ?? "9:16",
+  };
+  if (opts.image_url) {
+    body.frame_images = [{
+      type: "image_url",
+      image_url: { url: opts.image_url },
+      frame_type: "first_frame",
+    }];
+  }
+
+  // 1) Submit job.
+  const submit = await fetch(`${OPENROUTER_BASE}/videos`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!submit.ok) {
+    const t = await submit.text();
+    throw new Error(`OpenRouter submit ${submit.status}: ${t.slice(0, 400)}`);
+  }
+  const submitData = await submit.json();
+  const jobId: string | undefined = submitData?.id ?? submitData?.job_id ?? submitData?.data?.id;
+  if (!jobId) throw new Error(`OpenRouter: no job id in ${JSON.stringify(submitData).slice(0, 200)}`);
+
+  // 2) Poll until completed.
+  const started = Date.now();
+  const timeoutMs = 8 * 60 * 1000; // Veo can take a few minutes
+  while (Date.now() - started < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 4000));
+    const poll = await fetch(`${OPENROUTER_BASE}/videos/${encodeURIComponent(jobId)}`, {
+      headers: { "Authorization": `Bearer ${key}` },
+    });
+    if (!poll.ok) {
+      const t = await poll.text();
+      throw new Error(`OpenRouter poll ${poll.status}: ${t.slice(0, 200)}`);
+    }
+    const pollData = await poll.json();
+    const status = String(pollData?.status ?? "").toLowerCase();
+    if (status === "completed" || status === "succeeded") {
+      const unsigned: string[] = pollData?.unsigned_urls ?? [];
+      const directUrl = unsigned[0]
+        ?? pollData?.video_url
+        ?? pollData?.output?.video?.url;
+      const url = directUrl
+        ?? `${OPENROUTER_BASE}/videos/${encodeURIComponent(jobId)}/content?index=0`;
+      // For the auth-gated content endpoint we must fetch with the bearer
+      // token; downloadAndStore() uses plain fetch, so prefer unsigned_urls
+      // when present and otherwise download here.
+      if (unsigned[0]) {
+        return { video_url: unsigned[0], duration_s: Number(pollData?.duration ?? opts.duration_s ?? 8), model };
+      }
+      // Fall back to authenticated download.
+      const dl = await fetch(url, { headers: { "Authorization": `Bearer ${key}` } });
+      if (!dl.ok) throw new Error(`OpenRouter content ${dl.status}`);
+      // Stash the bytes via a data URL hop won't work — instead we save it
+      // immediately ourselves and return a placeholder URL so the caller's
+      // downloadAndStore() is a no-op pass-through.
+      const ab = await dl.arrayBuffer();
+      const stored = await putAsset({
+        prefix: `briefs/${opts.brief_id}/videos/shot_${opts.shot_idx}`,
+        ext: "mp4",
+        body: Buffer.from(ab),
+        contentType: dl.headers.get("content-type") ?? "video/mp4",
+      });
+      return {
+        video_url: stored.url,
+        duration_s: Number(pollData?.duration ?? opts.duration_s ?? 8),
+        model,
+        already_stored: true,
+        stored_key: stored.key,
+      };
+    }
+    if (status === "failed" || status === "error") {
+      throw new Error(pollData?.error ?? "OpenRouter video job failed");
+    }
+    // else still in_progress / queued — continue polling.
+  }
+  throw new Error(`OpenRouter video job timed out after ${timeoutMs}ms`);
 }
 
 export async function pollUntilDone(
