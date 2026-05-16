@@ -40,6 +40,7 @@ export async function GET() {
       RESEND_API_KEY: Boolean(process.env.RESEND_API_KEY),
       RESEND_FROM: process.env.RESEND_FROM ?? null,
       YOUTUBE_API_KEY: Boolean(process.env.YOUTUBE_API_KEY),
+      APIFY_TOKEN: Boolean(process.env.APIFY_TOKEN || process.env.APIFY_API_TOKEN),
       PERISKOPE_API_KEY: Boolean(process.env.PERISKOPE_API_KEY),
       PERISKOPE_PHONE: Boolean(process.env.PERISKOPE_PHONE),
       R2_BUCKET: process.env.R2_BUCKET ?? null,
