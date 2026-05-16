@@ -358,8 +358,12 @@ export async function ensureProductsLoaded(): Promise<void> {
 
 export function getAllProducts(): Product[] {
   const added = gProd.__products_added ? Array.from(gProd.__products_added.values()) : [];
-  // User-added products surface first so the most recent additions are easy to find.
-  return [...added, ...PRODUCTS];
+  const addedIds = new Set(added.map((p) => p.id));
+  // Overrides (added entries with built-in ids) win, then any built-ins not yet
+  // overridden. This both dedupes the catalog and lets PATCH on a built-in
+  // become the active version without leaving a duplicate row in the UI.
+  const builtinNotOverridden = PRODUCTS.filter((p) => !addedIds.has(p.id));
+  return [...added, ...builtinNotOverridden];
 }
 
 export function findProduct(id: string): Product | undefined {
