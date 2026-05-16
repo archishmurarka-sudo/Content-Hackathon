@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrief, setDelivery } from "@/lib/briefs";
 import { sendDeliveryEmail } from "@/lib/email";
+import { logEvent } from "@/lib/events";
 import { PRODUCTS } from "@/lib/data";
 import { isAuthed } from "@/lib/auth";
 
@@ -64,6 +65,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       sent_at: Date.now(),
       subject: `New video drop for @${brief.creator_handle} — ${productName}`,
     });
+    void logEvent({
+      type: "send.email",
+      brief_id: id,
+      payload: { to, posting_notes_present: Boolean(posting_notes), creator_handle: brief.creator_handle, product_id: brief.product_id, final_video_url: brief.final_video_url },
+      outcome: { message_id: result.id, status: "sent" },
+    });
     return NextResponse.json(await getBrief(id));
   } catch (err: any) {
     await setDelivery(id, {
@@ -71,6 +78,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       channel: "email",
       to,
       error: err?.message ?? "send failed",
+    });
+    void logEvent({
+      type: "send.failed",
+      brief_id: id,
+      payload: { channel: "email", to },
+      outcome: { error: err?.message ?? "send failed" },
     });
     return NextResponse.json({ error: err?.message ?? "send failed" }, { status: 500 });
   }

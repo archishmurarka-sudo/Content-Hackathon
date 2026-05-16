@@ -80,6 +80,24 @@ export async function ensureSchema(): Promise<void> {
       );
     `;
     await s`CREATE INDEX IF NOT EXISTS products_added_created_at_idx ON products_added (created_at DESC);`;
+    // Append-only event log for everything the operator does to a brief:
+    // script regens, frame regens with feedback, approves, video renders,
+    // stitches, sends. Source of truth for future model fine-tuning on
+    // operator preferences ("what good looked like vs what got redone").
+    await s`
+      CREATE TABLE IF NOT EXISTS events (
+        id BIGSERIAL PRIMARY KEY,
+        brief_id TEXT NOT NULL,
+        shot_idx INTEGER,
+        type TEXT NOT NULL,
+        payload JSONB,
+        outcome JSONB,
+        created_at BIGINT NOT NULL
+      );
+    `;
+    await s`CREATE INDEX IF NOT EXISTS events_brief_idx ON events (brief_id, created_at DESC);`;
+    await s`CREATE INDEX IF NOT EXISTS events_type_idx ON events (type);`;
+    await s`CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at DESC);`;
   })();
   return g.__schemaReady;
 }

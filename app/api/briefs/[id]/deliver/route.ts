@@ -7,6 +7,7 @@ import {
   getCreatorPhone,
   setCreatorPhone,
 } from "@/lib/delivery";
+import { logEvent } from "@/lib/events";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";

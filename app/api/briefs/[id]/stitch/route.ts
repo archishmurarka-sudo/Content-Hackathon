@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrief, setFinalVideo } from "@/lib/briefs";
 import { stitchFinalVideo } from "@/lib/stitch";
+import { logEvent } from "@/lib/events";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (ready.length === 0)
     return NextResponse.json({ error: "no rendered clips to stitch" }, { status: 400 });
 
+  const startedAt = Date.now();
   try {
     const stitched = await stitchFinalVideo({
       brief_id: id,
@@ -34,8 +36,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })),
     });
     await setFinalVideo(id, stitched.url, stitched.key);
+    void logEvent({
+      type: "stitch.completed",
+      brief_id: id,
+      payload: { clip_count: ready.length },
+      outcome: { final_video_url: stitched.url, latency_ms: Date.now() - startedAt },
+    });
     return NextResponse.json(await getBrief(id));
   } catch (err: any) {
+    void logEvent({
+      type: "stitch.failed",
+      brief_id: id,
+      payload: { clip_count: ready.length },
+      outcome: { error: err?.message ?? "stitch failed", latency_ms: Date.now() - startedAt },
+    });
     return NextResponse.json({ error: err?.message ?? "stitch failed" }, { status: 500 });
   }
 }

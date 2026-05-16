@@ -115,6 +115,28 @@ export default function SettingsPage() {
         </table>
       </div>
 
+      {/* Training data */}
+      <h2 style={{ marginBottom: 12 }}>Training data</h2>
+      <div className="card" style={{ marginBottom: 24 }}>
+        <p className="muted-sm" style={{ marginTop: 0 }}>
+          Every regen, approval, render, stitch and send is logged to the <code className="mono">events</code> table as an append-only stream — payload + outcome + latency. Use it to fine-tune image / video / script models on operator preferences ("which prompt was approved vs which one was redone, and what feedback drove the fix").
+        </p>
+        <div className="row" style={{ marginTop: 14, gap: 10 }}>
+          <a href="/api/events?limit=5000&format=jsonl" className="btn" style={{ textDecoration: "none" }}>
+            Download all events (JSONL)
+          </a>
+          <a href="/api/events?type=frame.regenerated&limit=5000&format=jsonl" className="btn-ghost btn" style={{ textDecoration: "none" }}>
+            Frame regens only (JSONL)
+          </a>
+          <a href="/api/events?type=frame.approved&limit=5000&format=jsonl" className="btn-ghost btn" style={{ textDecoration: "none" }}>
+            Frame approvals only (JSONL)
+          </a>
+          <a href="/api/events?limit=200" className="btn-ghost btn" style={{ textDecoration: "none" }}>
+            View latest 200 (JSON)
+          </a>
+        </div>
+      </div>
+
       {/* Danger zone */}
       <h2 style={{ marginBottom: 12, color: "var(--danger)" }}>Danger zone</h2>
       <div className="card" style={{ borderColor: "var(--danger)" }}>

@@ -4,6 +4,7 @@ import { generateStoryboard } from "@/lib/storyboard";
 import { createBrief, listBriefs, setStoryboard, setFailed, initFrames, setFrame } from "@/lib/briefs";
 import { generateFrameImage } from "@/lib/images";
 import { fetchYouTubeVideo } from "@/lib/youtube";
+import { logEvent } from "@/lib/events";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -53,8 +54,22 @@ export async function POST(req: NextRequest) {
   }
 
   const brief = await createBrief({ creator_handle: creator.handle, product_id, target_duration_s, youtube_ref });
+  void logEvent({
+    type: "brief.created",
+    brief_id: brief.id,
+    payload: {
+      creator_handle: creator.handle,
+      creator_archetype: creator.archetype,
+      product_id,
+      product_name: product.name,
+      target_duration_s,
+      funnel_stage,
+      youtube_url_attached: Boolean(youtube_url),
+    },
+  });
 
   // Generate storyboard in background, but await result so client gets it on POST.
+  const sbStartedAt = Date.now();
   try {
     const prototypes = rankPrototypes({
       creator,
@@ -75,6 +90,24 @@ export async function POST(req: NextRequest) {
       youtube_ref,
     });
     await setStoryboard(brief.id, { ...sb, brief_id: brief.id });
+    void logEvent({
+      type: "brief.storyboard_ready",
+      brief_id: brief.id,
+      payload: {
+        creator_handle: creator.handle,
+        product_id,
+        funnel_stage,
+        inspired_by_video_ids: prototypes.map((p) => p.video_id),
+      },
+      outcome: {
+        hook: sb.hook,
+        cta: sb.cta,
+        creator_gender: sb.creator_gender,
+        banner_choice: sb.banner_choice,
+        shot_count: sb.shots.length,
+        latency_ms: Date.now() - sbStartedAt,
+      },
+    });
 
     // Fire-and-forget: auto-generate frames as soon as the storyboard is ready.
     // We don't await — the POST returns immediately with the storyboard, and
@@ -82,6 +115,12 @@ export async function POST(req: NextRequest) {
     void autoGenerateFrames(brief.id, creator, product).catch(() => {});
   } catch (err: any) {
     await setFailed(brief.id, err?.message ?? "storyboard generation failed");
+    void logEvent({
+      type: "brief.failed",
+      brief_id: brief.id,
+      payload: { stage: "storyboard" },
+      outcome: { error: err?.message ?? "storyboard generation failed", latency_ms: Date.now() - sbStartedAt },
+    });
   }
 
   // Return current brief state

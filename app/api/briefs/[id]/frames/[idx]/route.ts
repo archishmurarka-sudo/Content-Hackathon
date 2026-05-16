@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBrief, setFrame } from "@/lib/briefs";
 import { generateFrameImage } from "@/lib/images";
 import { findCreator, findProduct, ensureCreatorsLoaded, ensureProductsLoaded } from "@/lib/data";
+import { logEvent } from "@/lib/events";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -32,10 +33,25 @@ export async function POST(
 
   if (action === "approve") {
     await setFrame(id, idx, { status: "approved" });
+    void logEvent({
+      type: "frame.approved",
+      brief_id: id,
+      shot_idx: idx,
+      payload: {
+        approved_prompt: shot.image_prompt,
+        approved_image_url: brief.frames?.find((f) => f.shot_idx === idx)?.image_url,
+      },
+    });
     return NextResponse.json(await getBrief(id));
   }
   if (action === "unapprove") {
     await setFrame(id, idx, { status: "ready" });
+    void logEvent({
+      type: "frame.unapproved",
+      brief_id: id,
+      shot_idx: idx,
+      payload: { reverted_prompt: shot.image_prompt },
+    });
     return NextResponse.json(await getBrief(id));
   }
 
@@ -56,6 +72,12 @@ export async function POST(
   const productLabel = product ? `${product.name} (${product.brand})` : undefined;
   const productHero = product?.hero_image_url ?? undefined;
 
+  // Snapshot the pre-regen state so we can log a clean (before, after) pair
+  // for training: original prompt + the image it produced, then the new prompt
+  // + the new image (and the user's feedback that drove the change).
+  const previousImageUrl = brief.frames?.find((f) => f.shot_idx === idx)?.image_url;
+  const startedAt = Date.now();
+
   try {
     const img = await generateFrameImage({
       prompt: promptText,
@@ -71,8 +93,41 @@ export async function POST(
       feedback,
     });
     await setFrame(id, idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
+    void logEvent({
+      type: "frame.regenerated",
+      brief_id: id,
+      shot_idx: idx,
+      payload: {
+        original_prompt: shot.image_prompt,
+        prompt_override: body.prompt_override ?? null,
+        prompt_used: promptText,
+        feedback: feedback ?? null,
+        creator_handle: brief.creator_handle,
+        creator_archetype: creator?.archetype ?? null,
+        product_id: brief.product_id,
+        product_hero_url: productHero ?? null,
+        previous_image_url: previousImageUrl ?? null,
+      },
+      outcome: {
+        new_image_url: img.url,
+        new_image_key: img.key,
+        latency_ms: Date.now() - startedAt,
+      },
+    });
   } catch (err: any) {
     await setFrame(id, idx, { status: "failed", error: err?.message ?? "frame failed" });
+    void logEvent({
+      type: "frame.regenerated",
+      brief_id: id,
+      shot_idx: idx,
+      payload: {
+        original_prompt: shot.image_prompt,
+        prompt_override: body.prompt_override ?? null,
+        prompt_used: promptText,
+        feedback: feedback ?? null,
+      },
+      outcome: { error: err?.message ?? "frame failed", latency_ms: Date.now() - startedAt },
+    });
   }
   return NextResponse.json(await getBrief(id));
 }
