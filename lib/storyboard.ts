@@ -205,6 +205,23 @@ CTA gesture lock
   in shot 2.
 - ${funnel.cta}
 
+AUDIO / LANGUAGE LOCK (HARD CONSTRAINT — DO NOT IGNORE)
+- The on-screen person is AMERICAN. The voiceover is in clear, native
+  American English. No accent that obscures pronunciation. No foreign
+  language. No mixed-language code-switching. No subtitles or captions
+  spoken aloud.
+- Voice register: a confident, peer-toned ${creator.energy_rating ?? 7}/10
+  energy {creator_gender} voice in their late 20s to early 40s.
+- The "speech" field is the EXACT script the voice says — write it as
+  clean conversational US English a real American influencer would say
+  on camera. No transliteration, no foreign-language words inside the
+  speech (e.g. no "namaste", no Hindi, Spanish, Tamil, etc.).
+- The video_prompt MUST embed the speech VERBATIM inside double quotes
+  and explicitly call it out as: "Audio: synchronized native American
+  English {creator_gender} voiceover, exact words: '<speech text>'".
+  Do NOT paraphrase the speech inside the video_prompt; copy it word for
+  word so the audio model has no room to invent its own line.
+
 OUTPUT FORMAT — pure JSON, no markdown fences, no commentary. The "shots"
 array MUST have exactly 2 entries, each with duration_s: 8.
 
@@ -224,8 +241,11 @@ For each shot the "image_prompt" must be a single self-contained paragraph
 
 For each shot the "video_prompt" must be the same self-contained paragraph
 but in motion terms (lip-sync, tilt, second-hand-pointing-down) — ready for
-Veo 3.1 Lite / image-to-video. Must explicitly call out "synchronized
-{creator_gender} voiceover" so the audio model picks the correct voice.
+Veo 3.1 Lite / image-to-video. It MUST include a final "Audio: synchronized
+native American English {creator_gender} voiceover, exact words: '<speech>'"
+sentence — verbatim, including the literal speech in quotes — so Veo
+generates US English audio that lip-syncs to the rendered face. NEVER use
+a non-English language anywhere in image_prompt or video_prompt.
 
 {
   "creator_gender": "female" | "male" | "non-binary",

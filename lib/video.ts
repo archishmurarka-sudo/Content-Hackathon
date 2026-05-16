@@ -159,14 +159,29 @@ async function downloadAndStore(remoteUrl: string, brief_id: string, shot_idx: n
 
 // ---- request body shaping ----
 
+// Force English-language audio. If the storyboard's video_prompt already
+// mentioned English we don't duplicate; otherwise we prepend a hard directive
+// so Veo's audio generator can't drift to Hindi / Spanish / a fake language.
+function withEnglishAudioGuard(prompt: string): string {
+  const head =
+    "LANGUAGE LOCK: the audio MUST be clear, native American English. " +
+    "The on-camera speaker is American. Do NOT use Hindi, Spanish, Tamil, " +
+    "Mandarin, or any non-English language. Do NOT invent gibberish or " +
+    "use a heavy accent that obscures pronunciation.\n\n";
+  // Cheap idempotency check so we don't double-prepend on re-renders.
+  if (/LANGUAGE LOCK|native American English|US English/i.test(prompt)) return prompt;
+  return head + prompt;
+}
+
 function buildBody(model: string, o: VideoGenContext) {
   const ar = o.aspect_ratio ?? "9:16";
   const duration = clampDuration(o.duration_s ?? 8);
+  const prompt = withEnglishAudioGuard(o.prompt);
   // Veo 3.1 Lite — image-to-video via frame_images[first_frame], audio on by default.
   if (model.startsWith("google/veo")) {
     return {
       model,
-      prompt: o.prompt,
+      prompt,
       duration,
       aspect_ratio: ar,
       resolution: DEFAULT_RESOLUTION,
@@ -183,7 +198,7 @@ function buildBody(model: string, o: VideoGenContext) {
   // Generic fallback for swapping models (e.g. openai/sora-2, bytedance/seedance).
   return {
     model,
-    prompt: o.prompt,
+    prompt,
     duration,
     aspect_ratio: ar,
     resolution: DEFAULT_RESOLUTION,
