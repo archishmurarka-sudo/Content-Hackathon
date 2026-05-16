@@ -53,8 +53,14 @@ function parseDurationToSeconds(iso: string): number {
 }
 
 export async function fetchYouTubeVideo(urlOrId: string): Promise<YouTubeVideo> {
-  const key = process.env.YOUTUBE_API_KEY;
-  if (!key) throw new Error("YOUTUBE_API_KEY not set");
+  // A single Google Cloud API key with the YouTube Data v3 + Generative Language
+  // APIs both enabled can serve both Gemini and YouTube. Fall back through the
+  // common env names so the user doesn't need a separate key.
+  const key =
+    process.env.YOUTUBE_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("YOUTUBE_API_KEY / GOOGLE_API_KEY / GEMINI_API_KEY not set");
   const videoId = extractVideoId(urlOrId);
   if (!videoId) throw new Error(`could not parse a YouTube video ID from '${urlOrId.slice(0, 80)}'`);
 

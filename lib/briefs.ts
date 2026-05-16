@@ -91,6 +91,21 @@ export function listBriefs() {
   return Array.from(store.values()).sort((a, b) => b.created_at - a.created_at);
 }
 
+export function deleteBrief(id: string): boolean {
+  return store.delete(id);
+}
+
+export function purgeFailed(): number {
+  let n = 0;
+  for (const [id, b] of store.entries()) {
+    if (b.status === "failed") {
+      store.delete(id);
+      n++;
+    }
+  }
+  return n;
+}
+
 export function patchShot(id: string, shotIdx: number, patch: Partial<NonNullable<Brief["storyboard"]>["shots"][number]>) {
   const b = store.get(id);
   if (!b?.storyboard) return;

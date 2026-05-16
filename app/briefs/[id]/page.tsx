@@ -89,6 +89,12 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     load();
   }
 
+  async function deleteThisBrief() {
+    if (!confirm("Delete this brief? Storyboard, frames, and any history will be removed.")) return;
+    const res = await fetch(`/api/briefs/${id}`, { method: "DELETE" });
+    if (res.ok) window.location.href = "/";
+  }
+
   async function shotAction(idx: number, action: "regenerate" | "approve" | "unapprove") {
     setPerShotBusy((b) => ({ ...b, [idx]: true }));
     await fetch(`/api/briefs/${id}/frames/${idx}`, {
@@ -117,6 +123,12 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
         <div className="row">
           <button onClick={regenStoryboard} disabled={regenerating || brief.status === "generating_storyboard"}>
             {regenerating ? "Regenerating…" : "Regenerate script"}
+          </button>
+          <button
+            onClick={deleteThisBrief}
+            style={{ background: "transparent", color: "#ff6b6b", borderColor: "#ff6b6b" }}
+          >
+            Delete
           </button>
         </div>
       </div>

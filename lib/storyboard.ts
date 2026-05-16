@@ -27,8 +27,9 @@ export type Storyboard = {
   inspired_by_video_ids: string[];
 };
 
+import { resolveTextModel } from "./models";
+
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
 function buildPrompt(
   creator: Creator,
@@ -141,8 +142,9 @@ export async function generateStoryboard(opts: {
     opts.youtube_ref,
   );
 
+  const model = resolveTextModel();
   const res = await fetch(
-    `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`,
+    `${GEMINI_BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -6,8 +6,9 @@
 import { putAsset } from "./storage";
 import { bump } from "./usage";
 
+import { resolveImageModel } from "./models";
+
 const KEY = process.env.GEMINI_API_KEY;
-const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 export type GeneratedImage = { url: string; key: string };
@@ -21,9 +22,10 @@ export async function generateFrameImage(opts: {
   if (!KEY) throw new Error("GEMINI_API_KEY not set");
 
   const fullPrompt = enrichForVerticalUgc(opts.prompt, opts.aspect_ratio ?? "9:16");
+  const model = resolveImageModel();
 
   const res = await fetch(
-    `${BASE}/models/${MODEL}:generateContent?key=${encodeURIComponent(KEY)}`,
+    `${BASE}/models/${model}:generateContent?key=${encodeURIComponent(KEY)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

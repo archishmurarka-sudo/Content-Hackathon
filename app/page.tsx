@@ -260,7 +260,22 @@ export default function Home() {
         </div>
       )}
 
-      <h2 style={{ marginTop: 32 }}>Recent briefs</h2>
+      <div className="row" style={{ marginTop: 32, justifyContent: "space-between", alignItems: "center" }}>
+        <h2 style={{ margin: 0 }}>Recent briefs</h2>
+        {briefs.some((b) => b.status === "failed") && (
+          <button
+            style={{ background: "transparent", color: "#ff6b6b", borderColor: "#ff6b6b", fontSize: 12, padding: "6px 12px" }}
+            onClick={async () => {
+              const n = briefs.filter((b) => b.status === "failed").length;
+              if (!confirm(`Clear ${n} failed brief${n === 1 ? "" : "s"}?`)) return;
+              await fetch("/api/briefs/purge-failed", { method: "POST" });
+              refresh();
+            }}
+          >
+            Clear failed
+          </button>
+        )}
+      </div>
       <div className="grid">
         {briefs.length === 0 && <p className="muted">No briefs yet — pick a creator above.</p>}
         {briefs.map((b) => (

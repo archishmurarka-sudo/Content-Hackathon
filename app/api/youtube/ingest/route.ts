@@ -11,9 +11,13 @@ export async function POST(req: NextRequest) {
   const url = String(body.url ?? "").trim();
   if (!url) return NextResponse.json({ error: "url required" }, { status: 400 });
 
-  if (!process.env.YOUTUBE_API_KEY) {
+  const hasKey =
+    process.env.YOUTUBE_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GEMINI_API_KEY;
+  if (!hasKey) {
     return NextResponse.json(
-      { error: "YOUTUBE_API_KEY not set on the server" },
+      { error: "No YouTube-capable API key set (tried YOUTUBE_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY)" },
       { status: 500 }
     );
   }

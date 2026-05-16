@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveTextModel, resolveImageModel } from "@/lib/models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,8 @@ export async function GET() {
     env: {
       DASHBOARD_PASSWORD: Boolean(process.env.DASHBOARD_PASSWORD),
       GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
-      GEMINI_MODEL: process.env.GEMINI_MODEL ?? null,
+      GEMINI_MODEL_RAW: process.env.GEMINI_MODEL ?? null,
+      GEMINI_IMAGE_MODEL_RAW: process.env.GEMINI_IMAGE_MODEL ?? null,
       HIGGSFIELD_API_KEY: Boolean(process.env.HIGGSFIELD_API_KEY),
       YOUTUBE_API_KEY: Boolean(process.env.YOUTUBE_API_KEY),
       PERISKOPE_API_KEY: Boolean(process.env.PERISKOPE_API_KEY),
@@ -23,6 +25,10 @@ export async function GET() {
         Boolean(process.env.R2_ACCESS_KEY_ID) &&
         Boolean(process.env.R2_SECRET_ACCESS_KEY) &&
         Boolean(process.env.R2_BUCKET),
+    },
+    resolved: {
+      gemini_text_model: resolveTextModel(),
+      gemini_image_model: resolveImageModel(),
     },
     commit_sha: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
     deploy_time: process.env.RAILWAY_DEPLOYMENT_CREATED_AT ?? null,
