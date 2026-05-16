@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findCreator, rankPrototypes, PRODUCTS, ensureCreatorsLoaded } from "@/lib/data";
+import { findCreator, rankPrototypes, ensureCreatorsLoaded, ensureProductsLoaded, findProduct, type Product } from "@/lib/data";
 import { generateStoryboard } from "@/lib/storyboard";
 import { createBrief, listBriefs, setStoryboard, setFailed, initFrames, setFrame } from "@/lib/briefs";
 import { generateFrameImage } from "@/lib/images";
@@ -29,9 +29,10 @@ export async function POST(req: NextRequest) {
   // Hydrate from Postgres so creators onboarded via /api/creators/scrape on a
   // previous request (or before this container booted) are findable.
   await ensureCreatorsLoaded();
+  await ensureProductsLoaded();
   const creator = findCreator(handle);
   if (!creator) return NextResponse.json({ error: `creator @${handle} not found in catalog` }, { status: 404 });
-  const product = PRODUCTS.find((p) => p.id === product_id);
+  const product = findProduct(product_id);
   if (!product) return NextResponse.json({ error: `unknown product '${product_id}'` }, { status: 400 });
 
   // Fail fast if Gemini isn't configured — don't create the brief at all.
@@ -67,8 +68,7 @@ export async function POST(req: NextRequest) {
     }
     const sb = await generateStoryboard({
       creator,
-      product_line: `${product.name} by ${product.brand} — ${product.one_liner}`,
-      product_id,
+      product,
       prototypes,
       target_duration_s,
       funnel_stage,
@@ -89,13 +89,14 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(await updated);
 }
 
-async function autoGenerateFrames(briefId: string, creator: { handle: string; archetype: string }, product: { name: string; brand: string }) {
+async function autoGenerateFrames(briefId: string, creator: { handle: string; archetype: string }, product: Product) {
   const { getBrief } = await import("@/lib/briefs");
   const b = await getBrief(briefId);
   if (!b?.storyboard) return;
 
   await initFrames(briefId);
   const productLabel = `${product.name} (${product.brand})`;
+  const productHero = product.hero_image_url ?? undefined;
 
   await Promise.all(
     b.storyboard.shots.map(async (shot) => {
@@ -105,6 +106,7 @@ async function autoGenerateFrames(briefId: string, creator: { handle: string; ar
           brief_id: briefId,
           shot_idx: shot.idx,
           product_label: productLabel,
+          product_hero_url: productHero,
           creator_handle: creator.handle,
           creator_archetype: creator.archetype,
           shot_visual: shot.visual,

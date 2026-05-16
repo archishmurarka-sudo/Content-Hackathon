@@ -1,7 +1,12 @@
 // Image generation via Gemini 2.5 Flash Image (aka Nano Banana).
 // Returns inline base64 PNG/JPG, stored via the storage abstraction.
+//
+// Supports image-conditioned generation: if a product hero image URL is
+// passed, we read it from our own storage and include it as an inlineData
+// part. The model then uses the real product packaging as a visual anchor
+// across every shot — no more hallucinated bottles.
 
-import { putAsset } from "./storage";
+import { putAsset, readAsset } from "./storage";
 import { bump } from "./usage";
 import { resolveImageModel } from "./models";
 
@@ -18,6 +23,7 @@ export type FrameGenContext = {
   // Optional grounding so the model knows what the product looks like,
   // who the creator is, and what BOF UGC aesthetic to match.
   product_label?: string; // e.g. "green pouch of Root Labs Mag Ashwa Gummies"
+  product_hero_url?: string; // /api/assets/... or absolute https — Nano Banana sees this as a reference
   creator_handle?: string;
   creator_archetype?: string;
   shot_visual?: string;       // raw "visual" line from storyboard
@@ -34,13 +40,24 @@ export async function generateFrameImage(opts: FrameGenContext): Promise<Generat
   const fullPrompt = buildFramePrompt(opts);
   const model = resolveImageModel();
 
+  // Build multimodal parts: optional product hero (as visual reference) + text prompt.
+  const parts: any[] = [];
+  if (opts.product_hero_url) {
+    const ref = await loadImageAsInlineData(opts.product_hero_url);
+    if (ref) {
+      parts.push({ inlineData: { mimeType: ref.mimeType, data: ref.base64 } });
+      parts.push({ text: "↑ This is the actual product. Use this exact packaging, label, color, shape, and proportions in the generated frame. Do not invent a different bottle." });
+    }
+  }
+  parts.push({ text: fullPrompt });
+
   const res = await fetch(
     `${BASE}/models/${model}:generateContent?key=${encodeURIComponent(KEY)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+        contents: [{ role: "user", parts }],
         generationConfig: {
           responseModalities: ["TEXT", "IMAGE"],
           temperature: 0.85,
@@ -56,10 +73,10 @@ export async function generateFrameImage(opts: FrameGenContext): Promise<Generat
   bump("frame_image");
 
   const data = await res.json();
-  const parts = data?.candidates?.[0]?.content?.parts ?? [];
-  const imagePart = parts.find((p: any) => p?.inlineData?.data);
+  const respParts = data?.candidates?.[0]?.content?.parts ?? [];
+  const imagePart = respParts.find((p: any) => p?.inlineData?.data);
   if (!imagePart) {
-    const textPart = parts.find((p: any) => p?.text);
+    const textPart = respParts.find((p: any) => p?.text);
     throw new Error(`Gemini returned no image. ${textPart?.text?.slice(0, 200) ?? ""}`);
   }
   const mime = imagePart.inlineData.mimeType ?? "image/png";
@@ -74,6 +91,30 @@ export async function generateFrameImage(opts: FrameGenContext): Promise<Generat
   });
 }
 
+// Convert a hero image URL to inline base64 for multimodal Gemini.
+// /api/assets/... is preferred — we read straight from storage to avoid an HTTP
+// round-trip back to ourselves. Absolute URLs are fetched.
+async function loadImageAsInlineData(url: string): Promise<{ mimeType: string; base64: string } | null> {
+  try {
+    if (url.startsWith("/api/assets/")) {
+      const key = url.replace(/^\/api\/assets\//, "").split("/").map(decodeURIComponent).join("/");
+      const r = await readAsset(key);
+      if (!r) return null;
+      return { mimeType: r.contentType || "image/png", base64: r.body.toString("base64") };
+    }
+    if (/^https?:\/\//.test(url)) {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const mimeType = res.headers.get("content-type") || "image/png";
+      const buf = Buffer.from(await res.arrayBuffer());
+      return { mimeType, base64: buf.toString("base64") };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function buildFramePrompt(o: FrameGenContext): string {
   const aspect = o.aspect_ratio ?? "9:16";
   const lines: string[] = [];
@@ -86,6 +127,9 @@ function buildFramePrompt(o: FrameGenContext): string {
   }
   if (o.product_label) {
     lines.push(`Product on screen: ${o.product_label}. The actual product must be visible and recognizable.`);
+  }
+  if (o.product_hero_url) {
+    lines.push(`PRODUCT REFERENCE: see the attached image. Render the product in this exact packaging — label, color, shape, proportions must match. Do not invent a different bottle / pouch / applicator.`);
   }
   if (o.shot_product_action) {
     lines.push(`Product action this shot: ${o.shot_product_action} (e.g. on a counter, held in hand, close-up, unboxing).`);

@@ -1,4 +1,4 @@
-import type { Creator, Prototype } from "./data";
+import type { Creator, Prototype, Product } from "./data";
 import type { YouTubeVideo } from "./youtube";
 import { bump } from "./usage";
 
@@ -53,7 +53,7 @@ const FUNNEL_INTENT: Record<FunnelStage, { name: string; intent: string; cta: st
 
 function buildPrompt(
   creator: Creator,
-  productLine: string,
+  product: Product,
   prototypes: Prototype[],
   target_s: number,
   funnel_stage: FunnelStage,
@@ -74,6 +74,15 @@ ${p.shots
     )
     .join("\n\n");
 
+  const ingredients = (product.key_ingredients ?? []).join(", ");
+  const painLines = (product.pain_breakdown ?? [])
+    .map((p) => `  - ${p.pain}${p.gmv_label ? ` (${p.gmv_label} tracked GMV)` : ""}: ${p.note ?? ""}`)
+    .join("\n");
+  const quotes = (product.consumer_quotes ?? [])
+    .slice(0, 6)
+    .map((q) => `  - "${q}"`)
+    .join("\n");
+
   return `You are a TikTok Shop short-form video director for Mosaic Wellness. Generate a ${target_s}-second ${funnel.name} video storyboard pegged to one specific creator's voice and visual style.
 
 FUNNEL INTENT
@@ -87,7 +96,17 @@ Dossier excerpt:
 ${creator.dossier_excerpt ?? "(none)"}
 
 PRODUCT
-${productLine}
+Name: ${product.name} by ${product.brand}
+One-liner: ${product.one_liner}
+${product.format ? `Format: ${product.format}` : ""}
+${ingredients ? `Key ingredients: ${ingredients}` : ""}
+${product.delivery_tech ? `Delivery tech: ${product.delivery_tech}` : ""}
+${product.price_band ? `Price: ${product.price_band}` : ""}
+${product.channel ? `Channel: ${product.channel}` : ""}
+${product.audience_primary ? `Primary audience: ${product.audience_primary}` : ""}
+${product.audience_secondary ? `Secondary audience: ${product.audience_secondary}` : ""}
+${painLines ? `\nPain anchors (use ONLY the ones that fit this creator's top pain and the funnel stage — do NOT cram everything in):\n${painLines}` : ""}
+${quotes ? `\nConsumer voice — verbatim phrases real buyers say (mirror this rhythm, don't quote literally):\n${quotes}` : ""}
 
 REFERENCE PROTOTYPES (real top-performing videos in this category — mimic their structure, tone, pacing, hook style, CTA hardness)
 ${protoSummary}
@@ -150,8 +169,7 @@ OUTPUT FORMAT — pure JSON, no markdown fences, no commentary:
 
 export async function generateStoryboard(opts: {
   creator: Creator;
-  product_line: string;
-  product_id: string;
+  product: Product;
   prototypes: Prototype[];
   target_duration_s: number;
   funnel_stage?: FunnelStage;
@@ -162,7 +180,7 @@ export async function generateStoryboard(opts: {
 
   const prompt = buildPrompt(
     opts.creator,
-    opts.product_line,
+    opts.product,
     opts.prototypes,
     opts.target_duration_s,
     opts.funnel_stage ?? "BOF",
@@ -219,7 +237,7 @@ export async function generateStoryboard(opts: {
 
   return {
     creator_handle: opts.creator.handle,
-    product_id: opts.product_id,
+    product_id: opts.product.id,
     total_duration_s: shots.reduce((sum, s) => sum + s.duration_s, 0),
     hook: String(parsed.hook ?? ""),
     cta: String(parsed.cta ?? ""),

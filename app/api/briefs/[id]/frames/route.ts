@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrief, initFrames, setFrame } from "@/lib/briefs";
 import { generateFrameImage } from "@/lib/images";
-import { findCreator, PRODUCTS } from "@/lib/data";
+import { findCreator, findProduct, ensureCreatorsLoaded, ensureProductsLoaded } from "@/lib/data";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -18,10 +18,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!brief.storyboard) return NextResponse.json({ error: "storyboard not ready" }, { status: 400 });
 
   await initFrames(id);
+  await ensureCreatorsLoaded();
+  await ensureProductsLoaded();
 
   const creator = findCreator(brief.creator_handle);
-  const product = PRODUCTS.find((p) => p.id === brief.product_id);
+  const product = findProduct(brief.product_id);
   const productLabel = product ? `${product.name} (${product.brand})` : undefined;
+  const productHero = product?.hero_image_url ?? undefined;
 
   await Promise.all(
     brief.storyboard.shots.map(async (shot) => {
@@ -31,6 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           brief_id: id,
           shot_idx: shot.idx,
           product_label: productLabel,
+          product_hero_url: productHero,
           creator_handle: brief.creator_handle,
           creator_archetype: creator?.archetype,
           shot_visual: shot.visual,

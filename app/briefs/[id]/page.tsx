@@ -64,9 +64,18 @@ type Brief = {
   final_video_url?: string;
 };
 
+type ProductInfo = {
+  id: string;
+  name: string;
+  brand: string;
+  hero_image_url?: string | null;
+  one_liner?: string;
+};
+
 export default function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [brief, setBrief] = useState<Brief | null>(null);
+  const [product, setProduct] = useState<ProductInfo | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [generatingFrames, setGeneratingFrames] = useState(false);
   const [perShotBusy, setPerShotBusy] = useState<Record<number, boolean>>({});
@@ -93,6 +102,18 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
   }, [id]);
+
+  // Once we know which product the brief is for, fetch the product record so
+  // we can show the same hero image that's being passed to Gemini as the
+  // product reference.
+  useEffect(() => {
+    if (!brief?.product_id) return;
+    if (product?.id === brief.product_id) return;
+    fetch(`/api/products/${brief.product_id}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setProduct(d.product))
+      .catch(() => {});
+  }, [brief?.product_id, product?.id]);
 
   async function regenStoryboard() {
     setRegenerating(true);
@@ -265,6 +286,27 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
           </div>
         ))}
       </div>
+
+      {product && (
+        <div className="card" style={{ marginTop: 24, display: "flex", gap: 16, alignItems: "center" }}>
+          <div style={{ width: 88, height: 88, flexShrink: 0, borderRadius: "var(--radius)", background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            {product.hero_image_url ? (
+              <img src={product.hero_image_url} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <span className="muted-sm" style={{ fontSize: 11, textAlign: "center", padding: 6 }}>No product hero — add one on the Products page</span>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="eyebrow">Product reference</div>
+            <div style={{ fontWeight: 600, marginTop: 4 }}>{product.name} <span className="muted-sm" style={{ fontWeight: 400 }}>· {product.brand}</span></div>
+            <div className="muted-sm" style={{ marginTop: 4 }}>
+              {product.hero_image_url
+                ? "This exact hero image is passed to Gemini Nano Banana as a visual anchor on every frame — packaging stays consistent across shots."
+                : "No hero image yet — frames will be generated from text only. Upload one on /products to lock product identity across shots."}
+            </div>
+          </div>
+        </div>
+      )}
 
       {brief.youtube_ref && (
         <div className="card" style={{ marginTop: 24, display: "flex", gap: 14, alignItems: "center" }}>

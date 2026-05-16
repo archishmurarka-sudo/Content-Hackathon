@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrief, setFrame } from "@/lib/briefs";
 import { generateFrameImage } from "@/lib/images";
-import { findCreator, PRODUCTS } from "@/lib/data";
+import { findCreator, findProduct, ensureCreatorsLoaded, ensureProductsLoaded } from "@/lib/data";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -49,9 +49,12 @@ export async function POST(
 
   await setFrame(id, idx, { status: "pending", error: undefined, prompt: promptText });
 
+  await ensureCreatorsLoaded();
+  await ensureProductsLoaded();
   const creator = findCreator(brief.creator_handle);
-  const product = PRODUCTS.find((p) => p.id === brief.product_id);
+  const product = findProduct(brief.product_id);
   const productLabel = product ? `${product.name} (${product.brand})` : undefined;
+  const productHero = product?.hero_image_url ?? undefined;
 
   try {
     const img = await generateFrameImage({
@@ -59,6 +62,7 @@ export async function POST(
       brief_id: id,
       shot_idx: idx,
       product_label: productLabel,
+      product_hero_url: productHero,
       creator_handle: brief.creator_handle,
       creator_archetype: creator?.archetype,
       shot_visual: shot.visual,
