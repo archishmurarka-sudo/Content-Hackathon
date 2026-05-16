@@ -1,0 +1,15 @@
+# Pins Node 20 (Next.js 16 requires >= 20.9). Without this Nixpacks may pick
+# an older Node and the "build image failed" Railway error is the result.
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm-10_x"]
+
+[phases.install]
+cmds = ["npm ci --no-audit --no-fund || npm install --no-audit --no-fund"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"

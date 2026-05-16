@@ -1,11 +1,14 @@
 {
-  "name": "higgsfield-dashboard",
+  "name": "mosaic-creator-engine",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p ${PORT:-3000}",
     "lint": "next lint"
   },
   "dependencies": {
