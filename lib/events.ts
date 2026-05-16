@@ -53,14 +53,17 @@ export async function logEvent(input: LogEventInput): Promise<void> {
   try {
     await ensureSchema();
     const s = sql();
+    // postgres.js types s.json with a recursive JSONValue that doesn't accept
+    // the more permissive Record<string, unknown>. Casting through `any` is
+    // intentional — the runtime accepts any JSON-serializable value.
     await s`
       INSERT INTO events (brief_id, shot_idx, type, payload, outcome, created_at)
       VALUES (
         ${input.brief_id},
         ${input.shot_idx ?? null},
         ${input.type},
-        ${input.payload ? s.json(input.payload) : null},
-        ${input.outcome ? s.json(input.outcome) : null},
+        ${input.payload ? s.json(input.payload as any) : null},
+        ${input.outcome ? s.json(input.outcome as any) : null},
         ${Date.now()}
       )
     `;
