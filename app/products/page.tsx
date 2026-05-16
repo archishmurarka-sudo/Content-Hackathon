@@ -85,33 +85,20 @@ export default function ProductsPage() {
           </div>
         )}
         {products.map((p) => (
-          <ProductCard key={p.id} product={p} briefCount={briefsFor(p.id).length} />
+          <ProductCard key={p.id} product={p} briefCount={briefsFor(p.id).length} onChanged={load} />
         ))}
       </div>
     </div>
   );
 }
 
-function ProductCard({ product, briefCount }: { product: Product; briefCount: number }) {
+function ProductCard({ product, briefCount, onChanged }: { product: Product; briefCount: number; onChanged: () => void }) {
   const isUser = product.source === "user";
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 0 }}>
-        {/* Hero image */}
-        <div style={{ background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 260, borderRight: "1px solid var(--border)" }}>
-          {product.hero_image_url ? (
-            <img
-              src={product.hero_image_url}
-              alt={product.name}
-              style={{ width: "100%", height: "100%", maxHeight: 320, objectFit: "cover" }}
-            />
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "var(--muted-2)" }}>
-              <Package size={28} />
-              <span className="muted-sm">No hero image yet</span>
-            </div>
-          )}
-        </div>
+        {/* Hero image — click to upload / replace */}
+        <HeroSlot product={product} onChanged={onChanged} />
 
         {/* Detail */}
         <div style={{ padding: 22 }}>
@@ -202,6 +189,98 @@ function KV({ label, value }: { label: string; value: string }) {
     <div>
       <div className="stat-label">{label}</div>
       <div style={{ marginTop: 4, fontSize: 13, color: "var(--text-2)" }}>{value}</div>
+    </div>
+  );
+}
+
+function HeroSlot({ product, onChanged }: { product: Product; onChanged: () => void }) {
+  const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("prefix", `products/${product.id}/hero`);
+      const up = await fetch("/api/uploads/image", { method: "POST", body: fd });
+      const upd = await up.json().catch(() => ({}));
+      if (!up.ok) throw new Error(upd?.error ?? "upload failed");
+
+      const patch = await fetch(`/api/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hero_image_url: upd.url }),
+      });
+      if (!patch.ok) {
+        const pd = await patch.json().catch(() => ({}));
+        throw new Error(pd?.error ?? "save failed");
+      }
+      toast.success("Hero image updated", product.name);
+      onChanged();
+    } catch (err: any) {
+      toast.error("Couldn't update hero", err?.message);
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div
+      onClick={() => !busy && fileRef.current?.click()}
+      style={{
+        background: "var(--surface-2)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 260,
+        borderRight: "1px solid var(--border)",
+        position: "relative",
+        cursor: busy ? "wait" : "pointer",
+        overflow: "hidden",
+      }}
+      title={product.hero_image_url ? "Click to replace hero image" : "Click to upload hero image"}
+    >
+      {product.hero_image_url ? (
+        <img
+          src={product.hero_image_url}
+          alt={product.name}
+          style={{ width: "100%", height: "100%", maxHeight: 320, objectFit: "cover" }}
+        />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: "var(--muted-2)" }}>
+          <Package size={28} />
+          <span className="muted-sm">{busy ? "Uploading…" : "Click to upload hero image"}</span>
+        </div>
+      )}
+      {product.hero_image_url && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 8,
+            left: 8,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 10px",
+            background: "rgba(11,13,12,0.7)",
+            backdropFilter: "blur(6px)",
+            borderRadius: "var(--radius-pill)",
+            color: "var(--text-2)",
+            fontSize: 11,
+            fontWeight: 600,
+            pointerEvents: "none",
+          }}
+        >
+          <Upload size={11} />
+          {busy ? "Uploading…" : "Click to replace"}
+        </div>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />
     </div>
   );
 }
