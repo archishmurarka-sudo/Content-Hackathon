@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileVideo2, Users, Package, Send, Settings, Activity } from "lucide-react";
+import { LayoutDashboard, FileVideo2, Users, Package, Send, Settings, Activity, Presentation } from "lucide-react";
 
 type Usage = { storyboard: number; frame_image: number; video_render: number; estimated_cost_usd: number };
 type Health = { commit_sha: string | null; db: { reachable: boolean; brief_count: number | null } };
@@ -29,6 +29,13 @@ const NAV: Array<{ section?: string; items: { href: string; label: string; icon:
       { href: "/settings", label: "Settings", icon: Settings },
     ],
   },
+];
+
+// Static-file pages served from /public — kept out of NAV[] because they
+// aren't Next routes (clicking them does a full browser navigation, not a
+// client transition). Add new entries here, not above.
+const STATIC_LINKS: { href: string; label: string; icon: React.ComponentType<any>; section?: string }[] = [
+  { href: "/pitch.html", label: "Pitch", icon: Presentation, section: "deck" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -74,6 +81,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </div>
         ))}
+
+        {STATIC_LINKS.length > 0 && (
+          <div>
+            {STATIC_LINKS[0].section && <div className="sidebar-section">{STATIC_LINKS[0].section}</div>}
+            {STATIC_LINKS.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href;
+              return (
+                <a key={item.href} href={item.href} className={`sidebar-link ${active ? "active" : ""}`}>
+                  <Icon size={15} className="sidebar-link-icon" />
+                  {item.label}
+                </a>
+              );
+            })}
+          </div>
+        )}
         <div style={{ marginTop: "auto", padding: "8px 10px", fontSize: 11, color: "var(--muted-2)" }}>
           {health?.commit_sha && (
             <div className="mono" title="Deployed commit">{health.commit_sha.slice(0, 7)}</div>
