@@ -116,81 +116,118 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
   (brief.frames ?? []).forEach((f) => (framesByIdx[f.shot_idx] = f));
   const allApproved = brief.frames && brief.frames.length > 0 && brief.frames.every((f) => f.status === "approved");
 
+  // Pipeline stage index: 0=storyboard, 1=frames generating, 2=frames ready, 3=approved, 4=delivered
+  const stageIdx = (() => {
+    if (brief.status === "delivered") return 4;
+    if (brief.status === "frames_approved" || brief.status === "videos_pending") return 3;
+    if (brief.status === "frames_ready") return 2;
+    if (brief.status === "frames_pending") return 1;
+    return 0;
+  })();
+
   return (
     <div className="container">
-      <p><Link href="/" className="muted">← Back</Link></p>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h1>Brief for @{brief.creator_handle}</h1>
-          <p className="muted">{brief.product_id} · target {brief.target_duration_s}s · <span className={`badge badge-${brief.status}`}>{brief.status.replace(/_/g, " ")}</span></p>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+        <div style={{ minWidth: 0 }}>
+          <span className="eyebrow">Brief</span>
+          <h1 style={{ marginTop: 6 }}>
+            <span style={{ color: "var(--muted)" }}>@</span>{brief.creator_handle}
+          </h1>
+          <div className="row" style={{ alignItems: "center", marginTop: 8, gap: 10 }}>
+            <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>{brief.product_id}</span>
+            <span className="muted-sm">target {brief.target_duration_s}s</span>
+            <span className={`badge badge-${brief.status}`}>{brief.status.replace(/_/g, " ")}</span>
+          </div>
         </div>
         <div className="row">
-          <button onClick={regenStoryboard} disabled={regenerating || brief.status === "generating_storyboard"}>
+          <button className="btn-ghost" onClick={regenStoryboard} disabled={regenerating || brief.status === "generating_storyboard"}>
             {regenerating ? "Regenerating…" : "Regenerate script"}
           </button>
-          <button
-            onClick={deleteThisBrief}
-            style={{ background: "transparent", color: "#ff6b6b", borderColor: "#ff6b6b" }}
-          >
+          <button className="btn-danger" onClick={deleteThisBrief}>
             Delete
           </button>
         </div>
       </div>
 
+      {/* Pipeline progress */}
+      <div className="pipeline">
+        {[
+          { label: "Storyboard", sub: "Gemini script" },
+          { label: "Frames", sub: "Nano Banana" },
+          { label: "Frames ready", sub: "Review + approve" },
+          { label: "Video render", sub: "Higgsfield (queued)" },
+          { label: "Delivered", sub: "Periskope (queued)" },
+        ].map((step, i) => (
+          <div key={i} className={`pipeline-step ${i < stageIdx ? "done" : i === stageIdx ? "active" : ""}`}>
+            <strong>{step.label}</strong>
+            <span>{step.sub}</span>
+          </div>
+        ))}
+      </div>
+
       {brief.youtube_ref && (
-        <div className="card" style={{ marginTop: 16, display: "flex", gap: 12, alignItems: "center" }}>
+        <div className="card" style={{ marginTop: 24, display: "flex", gap: 14, alignItems: "center" }}>
           {brief.youtube_ref.thumbnailUrl && (
             <img src={brief.youtube_ref.thumbnailUrl} alt="" style={{ width: 96, borderRadius: 6, flexShrink: 0 }} />
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>📎 YouTube reference: {brief.youtube_ref.title}</p>
-            <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
+            <div className="eyebrow">YouTube reference</div>
+            <div style={{ fontWeight: 600, marginTop: 4 }}>{brief.youtube_ref.title}</div>
+            <div className="muted-sm" style={{ marginTop: 4 }}>
               {brief.youtube_ref.channelTitle} · {brief.youtube_ref.durationSeconds}s
               {brief.youtube_ref.isShort ? " · Short" : ""}
               {brief.youtube_ref.viewCount != null ? ` · ${brief.youtube_ref.viewCount.toLocaleString()} views` : ""}
               {" · "}
               <a href={`https://www.youtube.com/watch?v=${brief.youtube_ref.videoId}`} target="_blank" rel="noopener noreferrer">open</a>
-            </p>
+            </div>
           </div>
         </div>
       )}
 
-      {brief.error && <div className="card" style={{ borderColor: "#ff6b6b", marginTop: 16 }}>
-        <p style={{ color: "#ff6b6b", margin: 0 }}>Error: {brief.error}</p>
+      {brief.error && <div className="card" style={{ borderColor: "var(--danger)", marginTop: 24 }}>
+        <div className="eyebrow" style={{ color: "var(--danger)" }}>Error</div>
+        <p style={{ color: "var(--danger)", margin: "6px 0 0" }}>{brief.error}</p>
       </div>}
 
       {brief.status === "generating_storyboard" && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <p className="muted">Gemini is drafting the storyboard…</p>
+        <div className="card" style={{ marginTop: 24 }}>
+          <p className="muted" style={{ margin: 0 }}>Gemini is drafting the storyboard…</p>
         </div>
       )}
 
       {brief.storyboard && (
         <>
-          <div className="card" style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: "#9a9aa8" }}>Hook</div>
-            <p style={{ fontSize: 20, fontWeight: 600, margin: "6px 0" }}>"{brief.storyboard.hook}"</p>
-            <div className="muted" style={{ marginTop: 8 }}>{brief.storyboard.rationale}</div>
-            <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-              Inspired by video IDs: {brief.storyboard.inspired_by_video_ids.join(", ")}
-            </div>
+          <div className="card" style={{ marginTop: 24 }}>
+            <div className="eyebrow">Hook</div>
+            <p style={{ fontFamily: "var(--font-serif)", fontSize: 28, lineHeight: 1.15, margin: "10px 0 0", fontWeight: 500 }}>
+              &ldquo;{brief.storyboard.hook}&rdquo;
+            </p>
+            {brief.storyboard.rationale && (
+              <div className="muted" style={{ marginTop: 14, maxWidth: 720 }}>{brief.storyboard.rationale}</div>
+            )}
+            {brief.storyboard.inspired_by_video_ids?.length > 0 && (
+              <div className="muted-sm mono" style={{ marginTop: 14 }}>
+                Inspired by: {brief.storyboard.inspired_by_video_ids.join(" · ")}
+              </div>
+            )}
           </div>
 
-          <div className="row" style={{ marginTop: 24, justifyContent: "space-between", alignItems: "center" }}>
+          <div className="row" style={{ marginTop: 32, justifyContent: "space-between", alignItems: "flex-end" }}>
             <div>
-              <h2 style={{ margin: 0 }}>Storyboard · {brief.storyboard.shots.length} shots · {brief.storyboard.total_duration_s}s</h2>
-              <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
-                Frames auto-generate via <strong>Gemini 2.5 Flash Image (Nano Banana)</strong> as soon as the storyboard lands. Edit the prompt or leave feedback below to refine any shot.
+              <span className="eyebrow">Storyboard</span>
+              <h2 style={{ marginTop: 6 }}>{brief.storyboard.shots.length} shots · {brief.storyboard.total_duration_s}s</h2>
+              <p className="muted-sm" style={{ margin: "6px 0 0", maxWidth: 540 }}>
+                Frames auto-generate via <strong style={{ color: "var(--text-2)" }}>Gemini 2.5 Flash Image (Nano Banana)</strong>. Edit the prompt or leave feedback on any shot to refine.
               </p>
             </div>
             <div className="row">
-              <button onClick={() => generateAllFrames(true)} disabled={generatingFrames}>
+              <button className="btn-ghost" onClick={() => generateAllFrames(true)} disabled={generatingFrames}>
                 {generatingFrames ? "Regenerating all…" : "Regenerate all frames"}
               </button>
             </div>
           </div>
 
-          <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
+          <div className="grid" style={{ gridTemplateColumns: "1fr", marginTop: 16 }}>
             {brief.storyboard.shots.map((s) => (
               <ShotCard
                 key={s.idx}
@@ -202,15 +239,18 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
             ))}
           </div>
 
-          <div className="card" style={{ marginTop: 24 }}>
-            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: "#9a9aa8" }}>CTA</div>
-            <p style={{ fontSize: 18, marginTop: 6 }}>"{brief.storyboard.cta}"</p>
+          <div className="card" style={{ marginTop: 32 }}>
+            <div className="eyebrow">CTA</div>
+            <p style={{ fontFamily: "var(--font-serif)", fontSize: 22, lineHeight: 1.2, margin: "8px 0 0", fontWeight: 500 }}>
+              &ldquo;{brief.storyboard.cta}&rdquo;
+            </p>
           </div>
 
           {allApproved && (
-            <div className="card" style={{ marginTop: 16, borderColor: "#4ade80" }}>
-              <p style={{ margin: 0 }}>
-                <strong>All frames approved.</strong> Ready for video render → Periskope delivery (next stage).
+            <div className="card" style={{ marginTop: 20, borderColor: "var(--accent)", background: "var(--accent-soft)" }}>
+              <div className="eyebrow" style={{ color: "var(--accent)" }}>All frames approved</div>
+              <p style={{ margin: "6px 0 0", color: "var(--text-2)" }}>
+                Ready for video render → Periskope delivery (next stage).
               </p>
             </div>
           )}
