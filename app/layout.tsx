@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Higgsfield Video Dashboard",
-  description: "Generate and manage Higgsfield video jobs",
+  title: "Mosaic Creator Engine",
+  description: "BOF video briefs, pegged to each creator's voice and best-performing pattern.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
