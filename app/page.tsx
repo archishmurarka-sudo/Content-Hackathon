@@ -28,6 +28,7 @@ export default function Home() {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [briefs, setBriefs] = useState<Brief[]>([]);
+  const [usage, setUsage] = useState<{ storyboard: number; frame_image: number; video_render: number; estimated_cost_usd: number } | null>(null);
 
   const [handle, setHandle] = useState("");
   const [productId, setProductId] = useState("ashwamag");
@@ -36,10 +37,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
-    const [cRes, pRes, bRes] = await Promise.all([
+    const [cRes, pRes, bRes, uRes] = await Promise.all([
       fetch("/api/creators?q=", { cache: "no-store" }),
       fetch("/api/products", { cache: "no-store" }),
       fetch("/api/briefs", { cache: "no-store" }),
+      fetch("/api/usage", { cache: "no-store" }),
     ]);
     if (cRes.status === 401) {
       setAuthNeeded(true);
@@ -48,6 +50,7 @@ export default function Home() {
     setCreators((await cRes.json()).creators ?? []);
     setProducts((await pRes.json()).products ?? []);
     setBriefs((await bRes.json()).briefs ?? []);
+    setUsage(uRes.ok ? await uRes.json() : null);
   }
 
   useEffect(() => { refresh(); }, []);
@@ -110,7 +113,11 @@ export default function Home() {
         <Stat label="Creators in catalog" value={creators.length.toString()} />
         <Stat label="Top-creator GMV indexed" value={`$${(totalGmv / 1_000_000).toFixed(1)}M`} />
         <Stat label="BOF prototypes" value="157" sub="39 under 30s" />
-        <Stat label="Briefs generated" value={briefs.length.toString()} />
+        <Stat
+          label="AI usage this run"
+          value={usage ? `$${usage.estimated_cost_usd.toFixed(2)}` : "—"}
+          sub={usage ? `${usage.storyboard} scripts · ${usage.frame_image} frames` : undefined}
+        />
       </div>
 
       <h2 style={{ marginTop: 32 }}>New brief</h2>

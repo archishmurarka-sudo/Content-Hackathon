@@ -4,6 +4,7 @@
 // Output: a publicly-fetchable URL (R2 or local).
 
 import { putAsset } from "./storage";
+import { bump } from "./usage";
 
 const KEY = process.env.GEMINI_API_KEY;
 const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.0-flash-preview-image-generation";
@@ -40,6 +41,7 @@ export async function generateFrameImage(opts: {
     const t = await res.text();
     throw new Error(`Gemini image error ${res.status}: ${t.slice(0, 400)}`);
   }
+  bump("frame_image");
 
   const data = await res.json();
   const parts = data?.candidates?.[0]?.content?.parts ?? [];

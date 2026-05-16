@@ -66,7 +66,12 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     load();
   }
 
-  async function generateAllFrames() {
+  async function generateAllFrames(isRegen: boolean) {
+    if (isRegen) {
+      const n = brief?.storyboard?.shots.length ?? 0;
+      const cost = (n * 0.04).toFixed(2);
+      if (!confirm(`Regenerate all ${n} frames? This will call Gemini ${n} times (~$${cost}).`)) return;
+    }
     setGeneratingFrames(true);
     await fetch(`/api/briefs/${id}/frames`, { method: "POST" });
     setGeneratingFrames(false);
@@ -130,11 +135,11 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
             <h2 style={{ margin: 0 }}>Storyboard · {brief.storyboard.shots.length} shots · {brief.storyboard.total_duration_s}s</h2>
             <div className="row">
               {!brief.frames || brief.frames.length === 0 ? (
-                <button onClick={generateAllFrames} disabled={generatingFrames}>
+                <button onClick={() => generateAllFrames(false)} disabled={generatingFrames}>
                   {generatingFrames ? "Generating frames…" : "Generate frame images"}
                 </button>
               ) : (
-                <button onClick={generateAllFrames} disabled={generatingFrames}>
+                <button onClick={() => generateAllFrames(true)} disabled={generatingFrames}>
                   {generatingFrames ? "Regenerating all…" : "Regenerate all frames"}
                 </button>
               )}

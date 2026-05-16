@@ -1,4 +1,5 @@
 import type { Creator, Prototype } from "./data";
+import { bump } from "./usage";
 
 export type StoryboardShot = {
   idx: number;
@@ -123,6 +124,7 @@ export async function generateStoryboard(opts: {
     const t = await res.text();
     throw new Error(`Gemini error ${res.status}: ${t.slice(0, 400)}`);
   }
+  bump("storyboard");
 
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;

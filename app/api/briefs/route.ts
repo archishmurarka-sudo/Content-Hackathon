@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
   const product = PRODUCTS.find((p) => p.id === product_id);
   if (!product) return NextResponse.json({ error: `unknown product '${product_id}'` }, { status: 400 });
 
+  // Fail fast if Gemini isn't configured — don't create the brief at all.
+  if (!process.env.GEMINI_API_KEY) {
+    return NextResponse.json({ error: "GEMINI_API_KEY not set on the server" }, { status: 500 });
+  }
+
   const brief = createBrief({ creator_handle: creator.handle, product_id, target_duration_s });
 
   // Generate storyboard in background, but await result so client gets it on POST.
