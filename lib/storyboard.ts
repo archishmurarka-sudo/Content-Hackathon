@@ -1,4 +1,5 @@
 import type { Creator, Prototype } from "./data";
+import type { YouTubeVideo } from "./youtube";
 import { bump } from "./usage";
 
 export type StoryboardShot = {
@@ -29,7 +30,13 @@ export type Storyboard = {
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 
-function buildPrompt(creator: Creator, productLine: string, prototypes: Prototype[], target_s: number) {
+function buildPrompt(
+  creator: Creator,
+  productLine: string,
+  prototypes: Prototype[],
+  target_s: number,
+  youtubeRef?: YouTubeVideo,
+) {
   const protoSummary = prototypes
     .map(
       (p) => `
@@ -58,6 +65,19 @@ ${productLine}
 
 REFERENCE PROTOTYPES (real top-performing videos in this category — mimic their structure, tone, pacing, hook style, CTA hardness)
 ${protoSummary}
+${
+  youtubeRef
+    ? `
+
+EXTERNAL YOUTUBE REFERENCE (use as additional inspiration for hook + pacing — match the energy, not the words)
+Title: ${youtubeRef.title}
+Channel: ${youtubeRef.channelTitle}
+Duration: ${youtubeRef.durationSeconds}s${youtubeRef.isShort ? " (Short)" : ""}
+Views: ${youtubeRef.viewCount ?? "?"} · Likes: ${youtubeRef.likeCount ?? "?"}
+Tags: ${(youtubeRef.tags ?? []).slice(0, 12).join(", ") || "(none)"}
+Description: ${(youtubeRef.description ?? "").slice(0, 400)}`
+    : ""
+}
 
 REQUIREMENTS
 - Total duration: ${target_s} seconds (±2s).
@@ -108,11 +128,18 @@ export async function generateStoryboard(opts: {
   product_id: string;
   prototypes: Prototype[];
   target_duration_s: number;
+  youtube_ref?: YouTubeVideo;
 }): Promise<Omit<Storyboard, "brief_id">> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
 
-  const prompt = buildPrompt(opts.creator, opts.product_line, opts.prototypes, opts.target_duration_s);
+  const prompt = buildPrompt(
+    opts.creator,
+    opts.product_line,
+    opts.prototypes,
+    opts.target_duration_s,
+    opts.youtube_ref,
+  );
 
   const res = await fetch(
     `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`,

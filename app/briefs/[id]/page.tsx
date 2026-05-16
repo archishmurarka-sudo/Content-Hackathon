@@ -22,6 +22,16 @@ type Frame = {
   prompt: string;
   error?: string;
 };
+type YouTubeRef = {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  durationSeconds: number;
+  viewCount: number | null;
+  likeCount: number | null;
+  thumbnailUrl: string;
+  isShort: boolean;
+};
 type Brief = {
   id: string;
   creator_handle: string;
@@ -38,6 +48,7 @@ type Brief = {
     shots: Shot[];
   };
   frames?: Frame[];
+  youtube_ref?: YouTubeRef;
 };
 
 export default function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -109,6 +120,24 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
           </button>
         </div>
       </div>
+
+      {brief.youtube_ref && (
+        <div className="card" style={{ marginTop: 16, display: "flex", gap: 12, alignItems: "center" }}>
+          {brief.youtube_ref.thumbnailUrl && (
+            <img src={brief.youtube_ref.thumbnailUrl} alt="" style={{ width: 96, borderRadius: 6, flexShrink: 0 }} />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>📎 YouTube reference: {brief.youtube_ref.title}</p>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
+              {brief.youtube_ref.channelTitle} · {brief.youtube_ref.durationSeconds}s
+              {brief.youtube_ref.isShort ? " · Short" : ""}
+              {brief.youtube_ref.viewCount != null ? ` · ${brief.youtube_ref.viewCount.toLocaleString()} views` : ""}
+              {" · "}
+              <a href={`https://www.youtube.com/watch?v=${brief.youtube_ref.videoId}`} target="_blank" rel="noopener noreferrer">open</a>
+            </p>
+          </div>
+        </div>
+      )}
 
       {brief.error && <div className="card" style={{ borderColor: "#ff6b6b", marginTop: 16 }}>
         <p style={{ color: "#ff6b6b", margin: 0 }}>Error: {brief.error}</p>

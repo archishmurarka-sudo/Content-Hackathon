@@ -31,6 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       product_id: brief.product_id,
       prototypes,
       target_duration_s: brief.target_duration_s,
+      youtube_ref: brief.youtube_ref,
     });
     setStoryboard(brief.id, { ...sb, brief_id: brief.id });
   } catch (err: any) {

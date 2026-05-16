@@ -88,7 +88,13 @@ export default function Home() {
     const res = await fetch("/api/briefs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ creator_handle: handle, product_id: productId, target_duration_s: duration }),
+      body: JSON.stringify({
+        creator_handle: handle,
+        product_id: productId,
+        target_duration_s: duration,
+        // If a YouTube ref was fetched in the panel below, attach it to the brief
+        youtube_url: ytVideo ? `https://www.youtube.com/watch?v=${ytVideo.videoId}` : (ytUrl || undefined),
+      }),
     });
     setSubmitting(false);
     const data = await res.json().catch(() => ({}));
@@ -149,6 +155,11 @@ export default function Home() {
             {submitting ? "Generating…" : "Generate brief"}
           </button>
         </div>
+        {ytVideo && (
+          <p className="muted" style={{ marginTop: 10, fontSize: 12 }}>
+            📎 YouTube ref attached: <strong>{ytVideo.title.slice(0, 80)}</strong> — will be folded into the storyboard prompt.
+          </p>
+        )}
         {error && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{error}</p>}
       </form>
 

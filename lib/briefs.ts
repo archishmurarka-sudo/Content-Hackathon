@@ -1,4 +1,5 @@
 import type { Storyboard } from "./storyboard";
+import type { YouTubeVideo } from "./youtube";
 
 export type BriefStatus =
   | "generating_storyboard"
@@ -30,6 +31,7 @@ export type Brief = {
   status: BriefStatus;
   storyboard?: Storyboard;
   frames?: Frame[];
+  youtube_ref?: YouTubeVideo;
   error?: string;
   created_at: number;
   updated_at: number;
@@ -47,12 +49,14 @@ export function createBrief(input: {
   creator_handle: string;
   product_id: string;
   target_duration_s: number;
+  youtube_ref?: YouTubeVideo;
 }): Brief {
   const brief: Brief = {
     id: uid(),
     creator_handle: input.creator_handle,
     product_id: input.product_id,
     target_duration_s: input.target_duration_s,
+    youtube_ref: input.youtube_ref,
     status: "generating_storyboard",
     created_at: Date.now(),
     updated_at: Date.now(),

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { findCreator, rankPrototypes, PRODUCTS } from "@/lib/data";
 import { generateStoryboard } from "@/lib/storyboard";
 import { createBrief, listBriefs, setStoryboard, setFailed } from "@/lib/briefs";
+import { fetchYouTubeVideo } from "@/lib/youtube";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
   const handle = String(body.creator_handle ?? "").trim();
   const product_id = String(body.product_id ?? "ashwamag").trim();
   const target_duration_s = Number(body.target_duration_s ?? 20);
+  const youtube_url = typeof body.youtube_url === "string" ? body.youtube_url.trim() : "";
 
   if (!handle) return NextResponse.json({ error: "creator_handle required" }, { status: 400 });
   const creator = findCreator(handle);
@@ -30,7 +32,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "GEMINI_API_KEY not set on the server" }, { status: 500 });
   }
 
-  const brief = createBrief({ creator_handle: creator.handle, product_id, target_duration_s });
+  // Optional YouTube reference — fetched up front so the storyboard prompt can use it.
+  // If the fetch fails we proceed without it rather than failing the whole brief.
+  let youtube_ref = undefined as Awaited<ReturnType<typeof fetchYouTubeVideo>> | undefined;
+  if (youtube_url) {
+    try {
+      youtube_ref = await fetchYouTubeVideo(youtube_url);
+    } catch (err: any) {
+      // soft-fail; storyboard will still generate without the ref
+      youtube_ref = undefined;
+    }
+  }
+
+  const brief = createBrief({ creator_handle: creator.handle, product_id, target_duration_s, youtube_ref });
 
   // Generate storyboard in background, but await result so client gets it on POST.
   try {
@@ -49,6 +63,7 @@ export async function POST(req: NextRequest) {
       product_id,
       prototypes,
       target_duration_s,
+      youtube_ref,
     });
     setStoryboard(brief.id, { ...sb, brief_id: brief.id });
   } catch (err: any) {
