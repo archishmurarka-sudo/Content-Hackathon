@@ -152,6 +152,50 @@ export default function Home() {
         {error && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{error}</p>}
       </form>
 
+      <h2 style={{ marginTop: 32 }}>Borrowed from open source</h2>
+      <p className="muted" style={{ marginTop: -8 }}>
+        Concrete code ported into this dashboard from the closest replicable projects on GitHub. Each integration is live now.
+      </p>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+        <Borrowed
+          repo="0xsline/StoryGen-Atelier"
+          license="Apache-2.0"
+          source="backend/src/services/llmService.js"
+          ports={[
+            { file: "lib/transitions.ts", desc: "analyzeShotTransition() — Gemini reads two adjacent frames + narratives, writes the cinematic bridge between them." },
+            { file: "lib/storyboard.ts", desc: "Narrative-continuity block (Story Arc / Visual Consistency / Seamless Flow / Causal Relationship) folded into the brief prompt." },
+            { file: "app/api/transitions/route.ts", desc: "POST /api/transitions { brief_id } → array of {transition_prompt, duration_s} for each cut." },
+          ]}
+        />
+        <Borrowed
+          repo="SamurAIGPT/AI-Youtube-Shorts-Generator"
+          license="pattern only"
+          source="shorts_generator/highlights.py"
+          ports={[
+            { file: "lib/virality.ts", desc: "8-signal virality rubric (HOOK / EMOTIONAL PEAK / OPINION BOMB / REVELATION / CONFLICT / QUOTABLE / STORY PEAK / PRACTICAL VALUE) + scorePrototypeVirality()." },
+            { file: "lib/virality.ts", desc: "dedupeByTimeOverlap() — generalized port of their dedupe_highlights overlap-suppression algorithm." },
+            { file: "lib/data.ts", desc: "rankPrototypes() now adds 0.5×virality to the fit score, so picked references are relevant AND viral." },
+          ]}
+        />
+        <Borrowed
+          repo="aself101/kling-api"
+          license="MIT"
+          source="src/utils/polling.ts"
+          ports={[
+            { file: "lib/poll.ts", desc: "pollUntil() + sleep() + formatDuration() — server-side polling primitive, stripped of the kling CLI spinner. Ready for the Higgsfield job poller." },
+          ]}
+        />
+        <Borrowed
+          repo="(your own YouTube Data API)"
+          license="—"
+          source="googleapis.com/youtube/v3/videos"
+          ports={[
+            { file: "lib/youtube.ts", desc: "Extracts video IDs from watch / youtu.be / shorts / embed URLs; pulls title, duration, tags, view & like counts." },
+            { file: "app/api/youtube/ingest/route.ts", desc: "POST /api/youtube/ingest { url } → YouTubeVideo. Foundation for synthesising fresh prototypes on demand." },
+          ]}
+        />
+      </div>
+
       <h2 style={{ marginTop: 32 }}>YouTube reference ingest</h2>
       <p className="muted" style={{ marginTop: -8 }}>
         Paste a YouTube Shorts or video URL — we&apos;ll pull title, duration, tags and stats via the YouTube Data API.
@@ -261,6 +305,36 @@ export default function Home() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function Borrowed({ repo, license, source, ports }: {
+  repo: string;
+  license: string;
+  source: string;
+  ports: { file: string; desc: string }[];
+}) {
+  const repoUrl = repo.startsWith("(") ? null : `https://github.com/${repo}`;
+  return (
+    <div className="card">
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+        <strong style={{ fontSize: 14 }}>
+          {repoUrl ? (
+            <a href={repoUrl} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>{repo}</a>
+          ) : repo}
+        </strong>
+        <span className="muted" style={{ fontSize: 11 }}>{license}</span>
+      </div>
+      <p className="muted" style={{ margin: "4px 0 12px", fontSize: 12, fontFamily: "monospace" }}>{source}</p>
+      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+        {ports.map((p) => (
+          <li key={p.file} style={{ marginBottom: 6 }}>
+            <code style={{ fontSize: 12 }}>{p.file}</code>
+            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{p.desc}</div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

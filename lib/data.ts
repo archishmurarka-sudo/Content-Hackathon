@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { scorePrototypeVirality } from "./virality";
 
 export type Creator = {
   handle: string;
@@ -112,7 +113,12 @@ export function rankPrototypes(opts: {
       }
       // Must have an actual shot list
       if (!p.shots || p.shots.length === 0) score -= 100;
-      return { p, score };
+      // Virality boost — ported pattern from SamurAIGPT/AI-Youtube-Shorts-Generator.
+      // Half-weighted so fit (product/archetype/duration) stays primary, viral
+      // references just float up among equally relevant ones.
+      const virality = scorePrototypeVirality(p);
+      score += virality.score * 0.5;
+      return { p, score, virality };
     })
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)

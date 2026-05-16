@@ -70,6 +70,15 @@ REQUIREMENTS
   - video_prompt: a 1–2 sentence motion description for an AI video model (what moves, camera, energy).
 - Hook in first 2 seconds. Final shot = CTA + urgency.
 
+NARRATIVE CONTINUITY (adapted from StoryGen-Atelier's storyboard prompt — Apache-2.0)
+1. Continuous Story Arc — shots form a single, unbroken chronological narrative. No disconnected scenes.
+   - First 25%: scene-set, introduce the hero subject.
+   - Middle 50%: the action / change / transformation.
+   - Final 25%: resolution + hard CTA.
+2. Visual Consistency — define a single Hero Subject (this creator's on-camera persona OR the product) and keep their appearance, lighting, palette and wardrobe consistent across consecutive shots.
+3. Seamless Flow — each shot continues IMMEDIATELY from where the previous ended. No teleports. The "visual" line should reference what carried over from the prior shot.
+4. Causal Relationship — every shot is a logical consequence of the previous one. The "speech" line should make the cause-and-effect obvious.
+
 OUTPUT FORMAT — pure JSON, no markdown fences, no commentary:
 {
   "hook": "first-3-words-style hook line",
