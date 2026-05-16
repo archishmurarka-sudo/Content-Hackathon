@@ -24,19 +24,19 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "regenerate");
 
-  const brief = getBrief(id);
+  const brief = await getBrief(id);
   if (!brief) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (!brief.storyboard) return NextResponse.json({ error: "storyboard not ready" }, { status: 400 });
   const shot = brief.storyboard.shots.find((s) => s.idx === idx);
   if (!shot) return NextResponse.json({ error: "shot not found" }, { status: 404 });
 
   if (action === "approve") {
-    setFrame(id, idx, { status: "approved" });
-    return NextResponse.json(getBrief(id));
+    await setFrame(id, idx, { status: "approved" });
+    return NextResponse.json(await getBrief(id));
   }
   if (action === "unapprove") {
-    setFrame(id, idx, { status: "ready" });
-    return NextResponse.json(getBrief(id));
+    await setFrame(id, idx, { status: "ready" });
+    return NextResponse.json(await getBrief(id));
   }
 
   // regenerate (default)
@@ -47,7 +47,7 @@ export async function POST(
     ? body.feedback.trim()
     : undefined;
 
-  setFrame(id, idx, { status: "pending", error: undefined, prompt: promptText });
+  await setFrame(id, idx, { status: "pending", error: undefined, prompt: promptText });
 
   const creator = findCreator(brief.creator_handle);
   const product = PRODUCTS.find((p) => p.id === brief.product_id);
@@ -66,9 +66,9 @@ export async function POST(
       shot_overlay: shot.overlay,
       feedback,
     });
-    setFrame(id, idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
+    await setFrame(id, idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
   } catch (err: any) {
-    setFrame(id, idx, { status: "failed", error: err?.message ?? "frame failed" });
+    await setFrame(id, idx, { status: "failed", error: err?.message ?? "frame failed" });
   }
-  return NextResponse.json(getBrief(id));
+  return NextResponse.json(await getBrief(id));
 }

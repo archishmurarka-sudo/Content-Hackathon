@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const brief_id = String(body.brief_id ?? "").trim();
   if (!brief_id) return NextResponse.json({ error: "brief_id required" }, { status: 400 });
 
-  const brief = getBrief(brief_id);
+  const brief = await getBrief(brief_id);
   if (!brief?.storyboard) return NextResponse.json({ error: "brief or storyboard not found" }, { status: 404 });
   const frames = brief.frames ?? [];
   if (frames.length < 2) return NextResponse.json({ error: "need at least 2 ready frames" }, { status: 400 });

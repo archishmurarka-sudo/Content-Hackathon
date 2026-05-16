@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const n = purgeFailed();
+  const n = await purgeFailed();
   return NextResponse.json({ purged: n });
 }

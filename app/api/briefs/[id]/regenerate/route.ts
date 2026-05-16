@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
-  const brief = getBrief(id);
+  const brief = await getBrief(id);
   if (!brief) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const creator = findCreator(brief.creator_handle);
@@ -33,10 +33,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       target_duration_s: brief.target_duration_s,
       youtube_ref: brief.youtube_ref,
     });
-    setStoryboard(brief.id, { ...sb, brief_id: brief.id });
+    await setStoryboard(brief.id, { ...sb, brief_id: brief.id });
   } catch (err: any) {
-    setFailed(brief.id, err?.message ?? "regenerate failed");
+    await setFailed(brief.id, err?.message ?? "regenerate failed");
   }
 
-  return NextResponse.json(getBrief(brief.id));
+  return NextResponse.json(await getBrief(brief.id));
 }

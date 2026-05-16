@@ -13,11 +13,11 @@ export const maxDuration = 300;
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
-  const brief = getBrief(id);
+  const brief = await getBrief(id);
   if (!brief) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (!brief.storyboard) return NextResponse.json({ error: "storyboard not ready" }, { status: 400 });
 
-  initFrames(id);
+  await initFrames(id);
 
   const creator = findCreator(brief.creator_handle);
   const product = PRODUCTS.find((p) => p.id === brief.product_id);
@@ -37,12 +37,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           shot_product_action: shot.product_action,
           shot_overlay: shot.overlay,
         });
-        setFrame(id, shot.idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
+        await setFrame(id, shot.idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
       } catch (err: any) {
-        setFrame(id, shot.idx, { status: "failed", error: err?.message ?? "frame failed" });
+        await setFrame(id, shot.idx, { status: "failed", error: err?.message ?? "frame failed" });
       }
     })
   );
 
-  return NextResponse.json(getBrief(id));
+  return NextResponse.json(await getBrief(id));
 }

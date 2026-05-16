@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  return NextResponse.json({ briefs: listBriefs() });
+  return NextResponse.json({ briefs: await listBriefs() });
 }
 
 export async function POST(req: NextRequest) {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const brief = createBrief({ creator_handle: creator.handle, product_id, target_duration_s, youtube_ref });
+  const brief = await createBrief({ creator_handle: creator.handle, product_id, target_duration_s, youtube_ref });
 
   // Generate storyboard in background, but await result so client gets it on POST.
   try {
@@ -66,27 +66,27 @@ export async function POST(req: NextRequest) {
       target_duration_s,
       youtube_ref,
     });
-    setStoryboard(brief.id, { ...sb, brief_id: brief.id });
+    await setStoryboard(brief.id, { ...sb, brief_id: brief.id });
 
     // Fire-and-forget: auto-generate frames as soon as the storyboard is ready.
     // We don't await — the POST returns immediately with the storyboard, and
     // the brief detail page polls for frames as they finish.
     void autoGenerateFrames(brief.id, creator, product).catch(() => {});
   } catch (err: any) {
-    setFailed(brief.id, err?.message ?? "storyboard generation failed");
+    await setFailed(brief.id, err?.message ?? "storyboard generation failed");
   }
 
   // Return current brief state
   const updated = (await import("@/lib/briefs")).getBrief(brief.id);
-  return NextResponse.json(updated);
+  return NextResponse.json(await updated);
 }
 
 async function autoGenerateFrames(briefId: string, creator: { handle: string; archetype: string }, product: { name: string; brand: string }) {
   const { getBrief } = await import("@/lib/briefs");
-  const b = getBrief(briefId);
+  const b = await getBrief(briefId);
   if (!b?.storyboard) return;
 
-  initFrames(briefId);
+  await initFrames(briefId);
   const productLabel = `${product.name} (${product.brand})`;
 
   await Promise.all(
@@ -103,9 +103,9 @@ async function autoGenerateFrames(briefId: string, creator: { handle: string; ar
           shot_product_action: shot.product_action,
           shot_overlay: shot.overlay,
         });
-        setFrame(briefId, shot.idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
+        await setFrame(briefId, shot.idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
       } catch (err: any) {
-        setFrame(briefId, shot.idx, { status: "failed", error: err?.message ?? "frame failed" });
+        await setFrame(briefId, shot.idx, { status: "failed", error: err?.message ?? "frame failed" });
       }
     })
   );
