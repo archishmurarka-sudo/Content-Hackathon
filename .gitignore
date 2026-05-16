@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Env files (NEVER commit secrets)
+.env
+.env.local
+.env*.local
+.env.production
+.env.development.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel / Railway
+.vercel
+.railway/
+
+# Internal tooling — not in this repo for now
+magcontentinator_package*/
+tmp/
+
+# Test
+coverage/
+*.lcov
