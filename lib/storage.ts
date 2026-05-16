@@ -10,26 +10,49 @@ import crypto from "node:crypto";
 
 export type PutResult = { url: string; key: string };
 
-const ACCOUNT = process.env.R2_ACCOUNT_ID;
-const ACCESS = process.env.R2_ACCESS_KEY_ID;
-const SECRET = process.env.R2_SECRET_ACCESS_KEY;
-const BUCKET = process.env.R2_BUCKET;
-const PUBLIC_BASE = process.env.R2_PUBLIC_BASE; // optional custom domain like https://assets.example.com
+// Accept either:
+//   R2_ENDPOINT  (path-style, e.g. https://<account>.r2.cloudflarestorage.com)  ← matches the .env we already have
+//   R2_ACCOUNT_ID (virtual-hosted style, builds <bucket>.<account>.r2.cloudflarestorage.com)
+function r2Endpoint(): { host: string; pathStyle: boolean } | null {
+  const bucket = process.env.R2_BUCKET;
+  if (!bucket) return null;
+  const explicitEndpoint = process.env.R2_ENDPOINT;
+  if (explicitEndpoint) {
+    const u = new URL(explicitEndpoint);
+    return { host: u.host, pathStyle: true };
+  }
+  const accountId = process.env.R2_ACCOUNT_ID;
+  if (accountId) {
+    return { host: `${bucket}.${accountId}.r2.cloudflarestorage.com`, pathStyle: false };
+  }
+  return null;
+}
 
 export function hasR2() {
-  return Boolean(ACCOUNT && ACCESS && SECRET && BUCKET);
+  return Boolean(
+    r2Endpoint() &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY
+  );
 }
 
 async function putR2(key: string, body: Buffer, contentType: string): Promise<PutResult> {
-  const host = `${BUCKET}.${ACCOUNT}.r2.cloudflarestorage.com`;
-  const url = `https://${host}/${encodeURIComponent(key)}`;
-  const sig = await sigv4Put({ host, key, body, contentType });
+  const ep = r2Endpoint();
+  if (!ep) throw new Error("R2 not configured (need R2_BUCKET + R2_ENDPOINT or R2_ACCOUNT_ID)");
+  const bucket = process.env.R2_BUCKET!;
+  // Cloudflare R2 supports both styles. Path-style URL: /<bucket>/<key>
+  const requestPath = ep.pathStyle
+    ? `/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`
+    : `/${encodeURIComponent(key)}`;
+  const url = `https://${ep.host}${requestPath}`;
+  const sig = await sigv4Put({ host: ep.host, requestPath, body, contentType });
   const res = await fetch(url, { method: "PUT", headers: sig.headers, body });
   if (!res.ok) {
     const t = await res.text();
     throw new Error(`R2 put failed ${res.status}: ${t.slice(0, 300)}`);
   }
-  const publicUrl = PUBLIC_BASE ? `${PUBLIC_BASE.replace(/\/$/, "")}/${key}` : url;
+  const publicBase = process.env.R2_PUBLIC_BASE;
+  const publicUrl = publicBase ? `${publicBase.replace(/\/$/, "")}/${key}` : url;
   return { url: publicUrl, key };
 }
 
@@ -54,15 +77,17 @@ export async function putAsset(opts: {
 }
 
 // --- minimal AWS SigV4 signer for R2 PUT (no SDK dependency) ---
-async function sigv4Put(opts: { host: string; key: string; body: Buffer; contentType: string }) {
-  const region = "auto";
+async function sigv4Put(opts: { host: string; requestPath: string; body: Buffer; contentType: string }) {
+  const access = process.env.R2_ACCESS_KEY_ID!;
+  const secret = process.env.R2_SECRET_ACCESS_KEY!;
+  const region = process.env.R2_REGION ?? "auto";
   const service = "s3";
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:\-]|\.\d{3}/g, "");
   const dateStamp = amzDate.slice(0, 8);
 
   const payloadHash = sha256Hex(opts.body);
-  const canonicalUri = "/" + encodeURIComponent(opts.key);
+  const canonicalUri = opts.requestPath; // already encoded
   const canonicalHeaders =
     `content-type:${opts.contentType}\n` +
     `host:${opts.host}\n` +
@@ -74,13 +99,13 @@ async function sigv4Put(opts: { host: string; key: string; body: Buffer; content
   const scope = `${dateStamp}/${region}/${service}/aws4_request`;
   const stringToSign = `AWS4-HMAC-SHA256\n${amzDate}\n${scope}\n${sha256Hex(canonicalRequest)}`;
 
-  const kDate = hmac(`AWS4${SECRET!}`, dateStamp);
+  const kDate = hmac(`AWS4${secret}`, dateStamp);
   const kRegion = hmac(kDate, region);
   const kService = hmac(kRegion, service);
   const kSigning = hmac(kService, "aws4_request");
   const signature = hmac(kSigning, stringToSign).toString("hex");
 
-  const authorization = `AWS4-HMAC-SHA256 Credential=${ACCESS}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const authorization = `AWS4-HMAC-SHA256 Credential=${access}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
   return {
     headers: {

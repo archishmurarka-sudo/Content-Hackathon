@@ -39,11 +39,13 @@ export async function GET() {
       PERISKOPE_API_KEY: Boolean(process.env.PERISKOPE_API_KEY),
       PERISKOPE_PHONE: Boolean(process.env.PERISKOPE_PHONE),
       R2_BUCKET: process.env.R2_BUCKET ?? null,
+      R2_ENDPOINT_SET: Boolean(process.env.R2_ENDPOINT),
+      R2_ACCOUNT_ID_SET: Boolean(process.env.R2_ACCOUNT_ID),
       R2_CONFIGURED:
-        Boolean(process.env.R2_ACCOUNT_ID) &&
         Boolean(process.env.R2_ACCESS_KEY_ID) &&
         Boolean(process.env.R2_SECRET_ACCESS_KEY) &&
-        Boolean(process.env.R2_BUCKET),
+        Boolean(process.env.R2_BUCKET) &&
+        (Boolean(process.env.R2_ENDPOINT) || Boolean(process.env.R2_ACCOUNT_ID)),
     },
     resolved: {
       gemini_text_model: resolveTextModel(),
