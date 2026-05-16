@@ -95,12 +95,16 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     if (res.ok) window.location.href = "/";
   }
 
-  async function shotAction(idx: number, action: "regenerate" | "approve" | "unapprove") {
+  async function shotAction(
+    idx: number,
+    action: "regenerate" | "approve" | "unapprove",
+    extra?: { prompt_override?: string; feedback?: string }
+  ) {
     setPerShotBusy((b) => ({ ...b, [idx]: true }));
     await fetch(`/api/briefs/${id}/frames/${idx}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, ...(extra ?? {}) }),
     });
     setPerShotBusy((b) => ({ ...b, [idx]: false }));
     load();
@@ -173,87 +177,29 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
           </div>
 
           <div className="row" style={{ marginTop: 24, justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ margin: 0 }}>Storyboard · {brief.storyboard.shots.length} shots · {brief.storyboard.total_duration_s}s</h2>
+            <div>
+              <h2 style={{ margin: 0 }}>Storyboard · {brief.storyboard.shots.length} shots · {brief.storyboard.total_duration_s}s</h2>
+              <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
+                Frames auto-generate via <strong>Gemini 2.5 Flash Image (Nano Banana)</strong> as soon as the storyboard lands. Edit the prompt or leave feedback below to refine any shot.
+              </p>
+            </div>
             <div className="row">
-              {!brief.frames || brief.frames.length === 0 ? (
-                <button onClick={() => generateAllFrames(false)} disabled={generatingFrames}>
-                  {generatingFrames ? "Generating frames…" : "Generate frame images"}
-                </button>
-              ) : (
-                <button onClick={() => generateAllFrames(true)} disabled={generatingFrames}>
-                  {generatingFrames ? "Regenerating all…" : "Regenerate all frames"}
-                </button>
-              )}
+              <button onClick={() => generateAllFrames(true)} disabled={generatingFrames}>
+                {generatingFrames ? "Regenerating all…" : "Regenerate all frames"}
+              </button>
             </div>
           </div>
 
           <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
-            {brief.storyboard.shots.map((s) => {
-              const f = framesByIdx[s.idx];
-              return (
-                <div key={s.idx} className="card">
-                  <div className="row" style={{ gap: 16, alignItems: "flex-start" }}>
-                    <div style={{ width: 220, flexShrink: 0 }}>
-                      {f?.image_url ? (
-                        <img src={f.image_url} alt={`Shot ${s.idx + 1}`} style={{ width: "100%", borderRadius: 8, aspectRatio: "9/16", objectFit: "cover", background: "#000" }} />
-                      ) : (
-                        <div style={{ width: "100%", aspectRatio: "9/16", borderRadius: 8, background: "#1a1a22", display: "flex", alignItems: "center", justifyContent: "center", color: "#666", fontSize: 12, textAlign: "center", padding: 12 }}>
-                          {f?.status === "pending" ? "Generating…" : f?.status === "failed" ? "Failed" : "No frame yet"}
-                        </div>
-                      )}
-                      {f && (
-                        <div style={{ marginTop: 8 }}>
-                          <span className={`badge badge-${f.status === "approved" ? "succeeded" : f.status === "ready" ? "storyboard_ready" : f.status === "failed" ? "failed" : "pending"}`}>
-                            {f.status}
-                          </span>
-                          {f.error && <p style={{ color: "#ff6b6b", fontSize: 11, marginTop: 6 }}>{f.error}</p>}
-                          <div className="row" style={{ marginTop: 8 }}>
-                            <button
-                              style={{ padding: "4px 10px", fontSize: 12 }}
-                              onClick={() => shotAction(s.idx, "regenerate")}
-                              disabled={perShotBusy[s.idx]}
-                            >
-                              {perShotBusy[s.idx] ? "…" : "Regenerate"}
-                            </button>
-                            {f.status === "ready" ? (
-                              <button
-                                style={{ padding: "4px 10px", fontSize: 12, background: "#4ade80", borderColor: "#4ade80" }}
-                                onClick={() => shotAction(s.idx, "approve")}
-                                disabled={perShotBusy[s.idx]}
-                              >
-                                Approve
-                              </button>
-                            ) : f.status === "approved" ? (
-                              <button
-                                style={{ padding: "4px 10px", fontSize: 12 }}
-                                onClick={() => shotAction(s.idx, "unapprove")}
-                                disabled={perShotBusy[s.idx]}
-                              >
-                                Unapprove
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                        <strong>Shot {s.idx + 1} · {s.duration_s}s</strong>
-                        <span className="muted">{s.speech_tone} · {s.product_action} · {s.transition}</span>
-                      </div>
-                      <p style={{ marginTop: 12, fontSize: 16 }}><strong>Speech:</strong> {s.speech}</p>
-                      {s.overlay && <p className="muted" style={{ fontSize: 13 }}><strong>Overlay:</strong> {s.overlay}</p>}
-                      <p className="muted" style={{ fontSize: 13 }}><strong>Visual:</strong> {s.visual}</p>
-                      <details style={{ marginTop: 8 }}>
-                        <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>Image + video prompts</summary>
-                        <p className="muted" style={{ fontSize: 12, marginTop: 6 }}><strong>image_prompt:</strong> {s.image_prompt}</p>
-                        <p className="muted" style={{ fontSize: 12 }}><strong>video_prompt:</strong> {s.video_prompt}</p>
-                      </details>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {brief.storyboard.shots.map((s) => (
+              <ShotCard
+                key={s.idx}
+                shot={s}
+                frame={framesByIdx[s.idx]}
+                busy={Boolean(perShotBusy[s.idx])}
+                onAction={(action, extra) => shotAction(s.idx, action, extra)}
+              />
+            ))}
           </div>
 
           <div className="card" style={{ marginTop: 24 }}>
@@ -270,6 +216,140 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function ShotCard({
+  shot,
+  frame,
+  busy,
+  onAction,
+}: {
+  shot: Shot;
+  frame: Frame | undefined;
+  busy: boolean;
+  onAction: (action: "regenerate" | "approve" | "unapprove", extra?: { prompt_override?: string; feedback?: string }) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [promptDraft, setPromptDraft] = useState(shot.image_prompt);
+  const [feedback, setFeedback] = useState("");
+
+  // Reset the editor when the underlying prompt changes (e.g. after a script regen)
+  useEffect(() => {
+    if (!editing) setPromptDraft(shot.image_prompt);
+  }, [shot.image_prompt, editing]);
+
+  const status = frame?.status ?? "pending";
+  const statusBadgeClass =
+    status === "approved" ? "succeeded" :
+    status === "ready" ? "storyboard_ready" :
+    status === "failed" ? "failed" : "pending";
+
+  return (
+    <div className="card">
+      <div className="row" style={{ gap: 16, alignItems: "flex-start" }}>
+        <div style={{ width: 220, flexShrink: 0 }}>
+          {frame?.image_url ? (
+            <img
+              src={frame.image_url}
+              alt={`Shot ${shot.idx + 1}`}
+              style={{ width: "100%", borderRadius: 8, aspectRatio: "9/16", objectFit: "cover", background: "#000" }}
+            />
+          ) : (
+            <div style={{ width: "100%", aspectRatio: "9/16", borderRadius: 8, background: "#1a1a22", display: "flex", alignItems: "center", justifyContent: "center", color: "#666", fontSize: 12, textAlign: "center", padding: 12 }}>
+              {status === "pending" ? "Generating…" : status === "failed" ? "Failed" : "No frame yet"}
+            </div>
+          )}
+          <div style={{ marginTop: 8 }}>
+            <span className={`badge badge-${statusBadgeClass}`}>{status}</span>
+            {frame?.error && <p style={{ color: "#ff6b6b", fontSize: 11, marginTop: 6 }}>{frame.error}</p>}
+            <div className="row" style={{ marginTop: 8 }}>
+              {status === "ready" ? (
+                <button
+                  style={{ padding: "4px 10px", fontSize: 12, background: "#4ade80", borderColor: "#4ade80" }}
+                  onClick={() => onAction("approve")}
+                  disabled={busy}
+                >
+                  Approve
+                </button>
+              ) : status === "approved" ? (
+                <button
+                  style={{ padding: "4px 10px", fontSize: 12 }}
+                  onClick={() => onAction("unapprove")}
+                  disabled={busy}
+                >
+                  Unapprove
+                </button>
+              ) : null}
+              <button
+                style={{ padding: "4px 10px", fontSize: 12, background: "transparent", color: "#8ab4ff", borderColor: "#8ab4ff" }}
+                onClick={() => setEditing((v) => !v)}
+                disabled={busy}
+              >
+                {editing ? "Hide" : "Edit & regen"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+            <strong>Shot {shot.idx + 1} · {shot.duration_s}s</strong>
+            <span className="muted">{shot.speech_tone} · {shot.product_action} · {shot.transition}</span>
+          </div>
+          <p style={{ marginTop: 12, fontSize: 16 }}><strong>Speech:</strong> {shot.speech}</p>
+          {shot.overlay && <p className="muted" style={{ fontSize: 13 }}><strong>Overlay:</strong> {shot.overlay}</p>}
+          <p className="muted" style={{ fontSize: 13 }}><strong>Visual:</strong> {shot.visual}</p>
+
+          {editing && (
+            <div style={{ marginTop: 12, borderTop: "1px solid #23232f", paddingTop: 12 }}>
+              <label className="muted" style={{ fontSize: 12 }}>Image prompt (edit then regenerate)</label>
+              <textarea
+                value={promptDraft}
+                onChange={(e) => setPromptDraft(e.target.value)}
+                rows={4}
+                style={{ width: "100%", marginTop: 4, fontSize: 13 }}
+              />
+              <label className="muted" style={{ fontSize: 12, marginTop: 8, display: "block" }}>
+                Feedback on the current image (one-shot — e.g. "darker lighting, hand from the right")
+              </label>
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                rows={2}
+                placeholder="What should change in the next render?"
+                style={{ width: "100%", marginTop: 4, fontSize: 13 }}
+              />
+              <div className="row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
+                <button
+                  style={{ padding: "6px 12px", fontSize: 12, background: "transparent", color: "#9a9aa8", borderColor: "#3a3a48" }}
+                  onClick={() => {
+                    setPromptDraft(shot.image_prompt);
+                    setFeedback("");
+                  }}
+                  disabled={busy}
+                >
+                  Reset
+                </button>
+                <button
+                  style={{ padding: "6px 12px", fontSize: 12 }}
+                  onClick={() => {
+                    onAction("regenerate", {
+                      prompt_override: promptDraft.trim() !== shot.image_prompt ? promptDraft : undefined,
+                      feedback: feedback.trim() || undefined,
+                    });
+                    setFeedback("");
+                  }}
+                  disabled={busy}
+                >
+                  {busy ? "Regenerating…" : "Regenerate with edits"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

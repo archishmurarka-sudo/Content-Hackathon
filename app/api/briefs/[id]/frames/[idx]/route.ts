@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBrief, setFrame } from "@/lib/briefs";
 import { generateFrameImage } from "@/lib/images";
+import { findCreator, PRODUCTS } from "@/lib/data";
 import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -8,7 +9,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 // POST /api/briefs/:id/frames/:idx
-// body: { action: "regenerate" | "approve" | "unapprove", prompt_override?: string }
+// body: {
+//   action: "regenerate" | "approve" | "unapprove",
+//   prompt_override?: string,   // full replacement of the per-shot image prompt
+//   feedback?: string           // one-shot user note: "make it brighter", "hand from right side"
+// }
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; idx: string }> }
@@ -35,10 +40,32 @@ export async function POST(
   }
 
   // regenerate (default)
-  const prompt = String(body.prompt_override ?? shot.image_prompt);
-  setFrame(id, idx, { status: "pending", error: undefined, prompt });
+  const promptText = typeof body.prompt_override === "string" && body.prompt_override.trim()
+    ? body.prompt_override.trim()
+    : shot.image_prompt;
+  const feedback = typeof body.feedback === "string" && body.feedback.trim()
+    ? body.feedback.trim()
+    : undefined;
+
+  setFrame(id, idx, { status: "pending", error: undefined, prompt: promptText });
+
+  const creator = findCreator(brief.creator_handle);
+  const product = PRODUCTS.find((p) => p.id === brief.product_id);
+  const productLabel = product ? `${product.name} (${product.brand})` : undefined;
+
   try {
-    const img = await generateFrameImage({ prompt, brief_id: id, shot_idx: idx });
+    const img = await generateFrameImage({
+      prompt: promptText,
+      brief_id: id,
+      shot_idx: idx,
+      product_label: productLabel,
+      creator_handle: brief.creator_handle,
+      creator_archetype: creator?.archetype,
+      shot_visual: shot.visual,
+      shot_product_action: shot.product_action,
+      shot_overlay: shot.overlay,
+      feedback,
+    });
     setFrame(id, idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
   } catch (err: any) {
     setFrame(id, idx, { status: "failed", error: err?.message ?? "frame failed" });
