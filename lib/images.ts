@@ -119,23 +119,26 @@ function buildFramePrompt(o: FrameGenContext): string {
   const aspect = o.aspect_ratio ?? "9:16";
   const lines: string[] = [];
 
-  lines.push(`Portrait ${aspect} vertical photo — a single still frame from a naturalistic UGC TikTok Shop ad. Mobile-shot feel, no cinematic gloss, smartphone-shot aesthetic. NOT a polished studio ad.`);
-  lines.push(`Composition: subject and product clearly visible, eye-level, modern home / kitchen / bathroom / bedroom setting matched to the creator's archetype.`);
-  if (o.creator_handle || o.creator_archetype) {
-    lines.push(`Persona: this is the content style of @${o.creator_handle ?? "unknown"} — a ${o.creator_archetype ?? "wellness creator"}. Match that vibe.`);
-  }
+  lines.push(`Portrait ${aspect} vertical photo — a single still frame from a hyper-realistic TikTok Shop ad. Shot on a modern smartphone (iPhone 15 Pro / Pixel 9). Natural daylight or warm interior light, shallow depth of field, real fabric / wood / counter textures. Must pass for an actual photograph of an actual product on a real surface.`);
+  lines.push(`Composition: the PRODUCT is the hero — dead-center, label dead-on, fully readable, sharply lit. Background softly out of focus. Modern home / kitchen / bathroom counter matched to the product category.`);
   if (o.product_label) {
     lines.push(`Product on screen: ${o.product_label}. The actual product must be visible and recognizable.`);
   }
   if (o.shot_product_action) {
-    lines.push(`Product action this shot: ${o.shot_product_action} (e.g. on a counter, held in hand, close-up).`);
+    lines.push(`Product action this shot: ${o.shot_product_action} (held in hand, close-up, on counter, etc.).`);
   }
 
   lines.push("");
-  lines.push("STRICT RULES");
+  lines.push("HARD RULES (DO NOT violate)");
+  lines.push("- NO FACES anywhere in the frame. NO mouths. NO eyes. NO portrait of any person. Only hands (and at most a slice of forearm) may be visible.");
+  lines.push("- HYPER-REALISTIC photo aesthetic only. NO AI-art, illustration, anime, cartoon, 3D render, or CGI. NO glossy advertising sheen. It must look like a phone photo.");
   lines.push("- DO NOT render any text, captions, overlays, watermarks, app UI, or 'TikTok' branding in the image — overlay banners are added in post.");
   lines.push("- DO NOT add logos other than the actual product label.");
-  lines.push("- DO NOT use AI-art, illustration, anime, or 3D render styles — this must look like a phone photo.");
+  // Persona descriptor is intentionally moved AFTER the no-faces rule and reframed
+  // so the model doesn't accidentally render the creator's face.
+  if (o.creator_handle || o.creator_archetype) {
+    lines.push(`(Creator vibe — for setting + prop choice ONLY, not for showing a person: ${o.creator_archetype ?? "wellness creator"} style. Do NOT render the creator.)`);
+  }
 
   if (o.shot_overlay) {
     lines.push(`(Note: the post will later overlay the text "${o.shot_overlay}" on top of this image — leave clean negative space in the upper third for it, but DO NOT draw the text yourself.)`);

@@ -126,53 +126,55 @@ Description: ${(youtubeRef.description ?? "").slice(0, 400)}`
     : ""
 }
 
-CREATOR GENDER PRESENTATION (infer first, then use consistently)
-Before writing anything else, infer this creator's gender presentation from
-the handle, archetype, and dossier excerpt above. Pick ONE of: "female",
-"male", "non-binary". Output it in the JSON as "creator_gender". Use it
-consistently across BOTH shots — same person on camera, same voice in the
-voiceover. Default rule: if the dossier or archetype clearly implies one
-(e.g. "esthetician" / "beauty_guru" lean female; "pharmacist" / "grooming"
-default to that creator's documented presentation), use that. If genuinely
-unclear, default to "female" (the majority of MagAshwa creators).
+CREATOR GENDER PRESENTATION (for the OFF-CAMERA voiceover only — no face)
+This is a hands-and-product BOF format with ZERO faces visible. Infer the
+creator's gender presentation from handle + archetype + dossier and output
+it as "creator_gender" — it locks the gender of the OFF-CAMERA narrator
+voice, not an on-screen person. Default rule: esthetician / beauty_guru
+lean female; default to "female" if unclear (majority of MagAshwa creators).
 
 HARDCODED FORMAT — LOCKED, DO NOT DEVIATE
 This is a BOTTOM-OF-FUNNEL TikTok Shop video. You MUST produce exactly TWO
-shots, 8 seconds each (16s total). The shots must look like the SAME real
-person filming themselves with their phone — same person on camera, same
-clothes, same setting, same lighting, same banner across both shots.
+shots, 8 seconds each (16s total).
+
+PRODUCT-FIRST · NO FACES · HYPER-REALISTIC
+- The product is the hero in every frame. The product is dead-center, label
+  dead-on, fully readable, sharply lit.
+- NO FACES anywhere in the frame. NO mouths. NO eyes. NO portrait of any
+  person. Only hands (and at most a slice of forearm) may be visible.
+- Aesthetic = a hyper-realistic photograph shot on a modern smartphone
+  (iPhone 15 Pro / Pixel 9). Natural daylight or warm interior lighting,
+  shallow depth of field, real fabric / wood / counter textures, no AI
+  artifacts, no illustration, no CGI, no glossy 3D render. The frame must
+  pass for an actual photo of the actual product on a real counter.
 
 SHOT 1 — Hook + Product Reveal (8s)
-- A real {creator_gender} person (~20s–40s, matched to the creator's archetype
-  and energy) is in selfie-frame — head and upper torso visible, looking
-  directly into the camera. Mid-shot from chest-up. They are holding the
-  product in their hand near their face/shoulder, label dead-on to the camera
-  and fully readable.
-- They deliver the hook spoken directly to camera (lip-sync, natural mouth
-  movement). At ~4s they tilt the product ~30° to show the side panel of
-  the label, then return it to dead-on while continuing to speak.
-- Setting: bright, clean, naturally-lit interior matched to the creator's
-  archetype (e.g. esthetician → soft-lit treatment room; pharmacist →
-  bright pharmacy counter or clean home office; wellness influencer →
-  sunny kitchen / bedroom).
-- Voiceover = exactly what the person says on camera (spoken naturally in
-  a confident peer-toned {creator_gender} voice, energy ${creator.energy_rating ?? 7}/10,
-  ~20 words): hook line + product name + key actives.
+- A casual hand enters frame from the right and confidently brings the
+  product toward the camera lens, stopping mid-frame with the label dead-on
+  and fully readable. Hand holds it still for a beat, then slowly rotates
+  ~30° to one side to reveal the side panel of the label, then returns to
+  dead-on.
+- Setting: bright, clean, naturally-lit countertop/surface matched to the
+  product category (kitchen counter for gummies, bathroom counter for the
+  roll-on, etc.). One or two minimal props softly out-of-focus in the
+  background (e.g. a folded towel, a small plant, a coffee mug).
+- VOICEOVER (off-camera narrator, no face on screen) — confident peer-toned
+  {creator_gender} narrator, energy ${creator.energy_rating ?? 7}/10, ~20
+  words: hook line + product name + key actives.
 - Banner pinned across the upper third for the full 8s (see BANNER below).
 
-SHOT 2 — Same Person + CTA Gesture (8s)
-- The SAME {creator_gender} person from shot 1, same outfit, same setting,
-  same lighting, same banner — visual + facial continuity from shot 1.
-- Mid-shot from chest-up, still holding the product near their face/shoulder,
-  label dead-on to camera. They continue speaking directly into the camera
-  with natural lip-sync.
-- NO product application. NO demo. NO product touching skin/scalp/hair. NO
-  cap removal. The product simply stays held label-forward the whole time.
-- Beat 4–8s: with their free hand they point firmly downward off the bottom
-  of the frame, indicating the TikTok Shop cart. The primary hand keeps the
-  product label-forward.
-- Voiceover (same {creator_gender} voice as shot 1, same energy, ~15 words):
-  structure/function benefit + hard CTA.
+SHOT 2 — Extended Hand + CTA Gesture (8s)
+- Same hand, same product, same surface, same lighting, same banner — visual
+  continuity from shot 1.
+- NO product application. NO demo. NO product touching skin / scalp / hair.
+  NO cap removal. The hand holds the product label-forward the whole time.
+- Beat 0–4s: hand holds product centered, subtle tilt side-to-side as if
+  showing it off.
+- Beat 4–8s: a SECOND hand enters from the bottom right and points firmly
+  downward off the bottom of the frame, indicating the TikTok Shop cart.
+  The primary hand keeps holding the product label-forward.
+- VOICEOVER (same off-camera {creator_gender} narrator as shot 1, same
+  energy, ~15 words): structure/function benefit + hard CTA.
 
 BANNER (LOCKED — pick ONE, identical across both shots)
 The "overlay" JSON field must be ONLY the short human-readable text the
@@ -206,7 +208,7 @@ CTA gesture lock
 - ${funnel.cta}
 
 AUDIO / LANGUAGE LOCK (HARD CONSTRAINT — DO NOT IGNORE)
-- The on-screen person is AMERICAN. The voiceover is in clear, native
+- The OFF-CAMERA narrator is AMERICAN. The voiceover is in clear, native
   American English. No accent that obscures pronunciation. No foreign
   language. No mixed-language code-switching. No subtitles or captions
   spoken aloud.
@@ -233,7 +235,7 @@ markup into "overlay". That belongs in image_prompt + video_prompt.
 For each shot the "image_prompt" must be a single self-contained paragraph
 (~150–250 words) ready to paste into Gemini Nano Banana. It must include:
   • portrait 9:16, 8-second still-frame UGC aesthetic
-  • the {creator_gender} person on camera with the choreography above
+  • hands-and-product choreography ONLY (no faces, no mouths, no eyes — see the no-faces rule above) + the hyper-realistic smartphone-photo aesthetic
   • the setting (creator-matched)
   • the BANNER block verbatim (pill colors, text, positioning)
   • "PRODUCT LOCK" hard constraint paragraph appended at the end (packaging
@@ -260,7 +262,7 @@ a non-English language anywhere in image_prompt or video_prompt.
       "duration_s": 8,
       "speech": "hook + product name + actives, ~20 words",
       "speech_tone": "confident|urgent|conversational|excited",
-      "visual": "shot-1 person on camera, mid-shot chest-up, holding product label-dead-on, rotates ~30° at ~4s",
+      "visual": "shot-1 hands-and-product only — no faces — hand brings product to camera, label dead-on, rotates ~30° at ~4s, hyper-realistic smartphone photo",
       "overlay": "short banner label only — e.g. 'FLASH SALE — Save up to 30% off' OR '🚨 PRICE DROP 🚨 — Limited time sale!'",
       "product_action": "close-up",
       "transition": "hard_cut",
@@ -272,7 +274,7 @@ a non-English language anywhere in image_prompt or video_prompt.
       "duration_s": 8,
       "speech": "structure/function benefit + hard CTA, ~15 words",
       "speech_tone": "confident|urgent",
-      "visual": "shot-2 same person continues to camera, free hand enters at 4s pointing down to cart",
+      "visual": "shot-2 same hand still holding product label-forward — no faces — second hand enters at 4s pointing down to cart, hyper-realistic smartphone photo",
       "overlay": "same short banner label as shot 1",
       "product_action": "on display",
       "transition": "none",
