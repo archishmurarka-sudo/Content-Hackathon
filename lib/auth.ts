@@ -1,13 +1,11 @@
 import { NextRequest } from "next/server";
 
-const COOKIE = "hf_dash_auth";
-
-export function isAuthed(req: NextRequest): boolean {
-  const expected = process.env.DASHBOARD_PASSWORD;
-  if (!expected) return true; // auth disabled
-  return req.cookies.get(COOKIE)?.value === expected;
+// Auth is intentionally disabled for the trial/demo. Re-enable later by
+// reverting to the password-cookie check.
+export function isAuthed(_req: NextRequest): boolean {
+  return true;
 }
 
 export function authCookieName() {
-  return COOKIE;
+  return "hf_dash_auth";
 }

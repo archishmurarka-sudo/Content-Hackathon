@@ -21,10 +21,6 @@ type Brief = {
 };
 
 export default function Home() {
-  const [authNeeded, setAuthNeeded] = useState(false);
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-
   const [creators, setCreators] = useState<Creator[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [briefs, setBriefs] = useState<Brief[]>([]);
@@ -43,10 +39,6 @@ export default function Home() {
       fetch("/api/briefs", { cache: "no-store" }),
       fetch("/api/usage", { cache: "no-store" }),
     ]);
-    if (cRes.status === 401) {
-      setAuthNeeded(true);
-      return;
-    }
     setCreators((await cRes.json()).creators ?? []);
     setProducts((await pRes.json()).products ?? []);
     setBriefs((await bRes.json()).briefs ?? []);
@@ -54,18 +46,6 @@ export default function Home() {
   }
 
   useEffect(() => { refresh(); }, []);
-
-  async function login() {
-    setAuthError(null);
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    if (!res.ok) { setAuthError("Wrong password"); return; }
-    setAuthNeeded(false);
-    refresh();
-  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,24 +62,6 @@ export default function Home() {
     setHandle("");
     refresh();
     if (data?.id) window.location.href = `/briefs/${data.id}`;
-  }
-
-  if (authNeeded) {
-    return (
-      <div className="container" style={{ maxWidth: 380 }}>
-        <h1>Mosaic Creator Engine</h1>
-        <div className="card">
-          <p className="muted">Enter the shared password.</p>
-          <div className="row" style={{ marginTop: 12 }}>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="password" style={{ flex: 1 }}
-              onKeyDown={(e) => e.key === "Enter" && login()} />
-            <button onClick={login}>Sign in</button>
-          </div>
-          {authError && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{authError}</p>}
-        </div>
-      </div>
-    );
   }
 
   const totalGmv = creators.reduce((s, c) => s + (c.kalo_gmv ?? 0), 0);
