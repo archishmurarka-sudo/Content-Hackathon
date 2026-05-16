@@ -11,28 +11,19 @@ type Creator = {
   energy_rating: number | null;
 };
 type Product = { id: string; name: string; brand: string; one_liner: string };
+type BriefFrame = { shot_idx: number; status: string; image_url?: string };
 type Brief = {
   id: string;
   creator_handle: string;
   product_id: string;
+  target_duration_s: number;
   status: string;
-  storyboard?: { hook: string; total_duration_s: number; shots: any[] };
+  storyboard?: { hook: string; cta?: string; total_duration_s: number; shots: any[] };
+  frames?: BriefFrame[];
+  youtube_ref?: { videoId: string; title: string; thumbnailUrl: string };
+  error?: string;
   created_at: number;
 };
-type YouTubeVideo = {
-  videoId: string;
-  title: string;
-  description: string;
-  channelTitle: string;
-  durationSeconds: number;
-  publishedAt: string;
-  tags: string[];
-  viewCount: number | null;
-  likeCount: number | null;
-  thumbnailUrl: string;
-  isShort: boolean;
-};
-
 export default function Home() {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -44,27 +35,6 @@ export default function Home() {
   const [duration, setDuration] = useState(20);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [ytUrl, setYtUrl] = useState("");
-  const [ytLoading, setYtLoading] = useState(false);
-  const [ytError, setYtError] = useState<string | null>(null);
-  const [ytVideo, setYtVideo] = useState<YouTubeVideo | null>(null);
-
-  async function fetchYouTube(e: React.FormEvent) {
-    e.preventDefault();
-    setYtError(null);
-    setYtVideo(null);
-    setYtLoading(true);
-    const res = await fetch("/api/youtube/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: ytUrl }),
-    });
-    setYtLoading(false);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setYtError(data.error ?? "failed"); return; }
-    setYtVideo(data.video);
-  }
 
   async function refresh() {
     const [cRes, pRes, bRes, uRes] = await Promise.all([
@@ -92,8 +62,6 @@ export default function Home() {
         creator_handle: handle,
         product_id: productId,
         target_duration_s: duration,
-        // If a YouTube ref was fetched in the panel below, attach it to the brief
-        youtube_url: ytVideo ? `https://www.youtube.com/watch?v=${ytVideo.videoId}` : (ytUrl || undefined),
       }),
     });
     setSubmitting(false);
@@ -155,110 +123,8 @@ export default function Home() {
             {submitting ? "Generating…" : "Generate brief"}
           </button>
         </div>
-        {ytVideo && (
-          <p className="muted" style={{ marginTop: 10, fontSize: 12 }}>
-            📎 YouTube ref attached: <strong>{ytVideo.title.slice(0, 80)}</strong> — will be folded into the storyboard prompt.
-          </p>
-        )}
         {error && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{error}</p>}
       </form>
-
-      <h2 style={{ marginTop: 32 }}>Borrowed from open source</h2>
-      <p className="muted" style={{ marginTop: -8 }}>
-        Concrete code ported into this dashboard from the closest replicable projects on GitHub. Each integration is live now.
-      </p>
-      <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-        <Borrowed
-          repo="0xsline/StoryGen-Atelier"
-          license="Apache-2.0"
-          source="backend/src/services/llmService.js"
-          ports={[
-            { file: "lib/transitions.ts", desc: "analyzeShotTransition() — Gemini reads two adjacent frames + narratives, writes the cinematic bridge between them." },
-            { file: "lib/storyboard.ts", desc: "Narrative-continuity block (Story Arc / Visual Consistency / Seamless Flow / Causal Relationship) folded into the brief prompt." },
-            { file: "app/api/transitions/route.ts", desc: "POST /api/transitions { brief_id } → array of {transition_prompt, duration_s} for each cut." },
-          ]}
-        />
-        <Borrowed
-          repo="SamurAIGPT/AI-Youtube-Shorts-Generator"
-          license="pattern only"
-          source="shorts_generator/highlights.py"
-          ports={[
-            { file: "lib/virality.ts", desc: "8-signal virality rubric (HOOK / EMOTIONAL PEAK / OPINION BOMB / REVELATION / CONFLICT / QUOTABLE / STORY PEAK / PRACTICAL VALUE) + scorePrototypeVirality()." },
-            { file: "lib/virality.ts", desc: "dedupeByTimeOverlap() — generalized port of their dedupe_highlights overlap-suppression algorithm." },
-            { file: "lib/data.ts", desc: "rankPrototypes() now adds 0.5×virality to the fit score, so picked references are relevant AND viral." },
-          ]}
-        />
-        <Borrowed
-          repo="aself101/kling-api"
-          license="MIT"
-          source="src/utils/polling.ts"
-          ports={[
-            { file: "lib/poll.ts", desc: "pollUntil() + sleep() + formatDuration() — server-side polling primitive, stripped of the kling CLI spinner. Ready for the Higgsfield job poller." },
-          ]}
-        />
-        <Borrowed
-          repo="(your own YouTube Data API)"
-          license="—"
-          source="googleapis.com/youtube/v3/videos"
-          ports={[
-            { file: "lib/youtube.ts", desc: "Extracts video IDs from watch / youtu.be / shorts / embed URLs; pulls title, duration, tags, view & like counts." },
-            { file: "app/api/youtube/ingest/route.ts", desc: "POST /api/youtube/ingest { url } → YouTubeVideo. Foundation for synthesising fresh prototypes on demand." },
-          ]}
-        />
-      </div>
-
-      <h2 style={{ marginTop: 32 }}>YouTube reference ingest</h2>
-      <p className="muted" style={{ marginTop: -8 }}>
-        Paste a YouTube Shorts or video URL — we&apos;ll pull title, duration, tags and stats via the YouTube Data API.
-        Becomes the seed for an in-session prototype (next iteration wires it into the storyboard prompt).
-      </p>
-      <form className="card" onSubmit={fetchYouTube}>
-        <div className="row" style={{ alignItems: "flex-end", gap: 16 }}>
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <label className="muted">YouTube URL or video ID</label>
-            <input
-              value={ytUrl}
-              onChange={(e) => setYtUrl(e.target.value)}
-              placeholder="https://www.youtube.com/shorts/…"
-              style={{ width: "100%", marginTop: 4 }}
-            />
-          </div>
-          <button type="submit" disabled={ytLoading || !ytUrl.trim()}>
-            {ytLoading ? "Fetching…" : "Fetch reference"}
-          </button>
-        </div>
-        {ytError && <p style={{ color: "#ff6b6b", marginTop: 12 }}>{ytError}</p>}
-      </form>
-      {ytVideo && (
-        <div className="card" style={{ marginTop: 12, display: "flex", gap: 16, alignItems: "flex-start" }}>
-          {ytVideo.thumbnailUrl && (
-            <img
-              src={ytVideo.thumbnailUrl}
-              alt=""
-              style={{ width: 160, borderRadius: 6, flexShrink: 0 }}
-            />
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontWeight: 600 }}>{ytVideo.title}</p>
-            <p className="muted" style={{ margin: "4px 0" }}>
-              {ytVideo.channelTitle} · {ytVideo.durationSeconds}s
-              {ytVideo.isShort && " · SHORT"}
-              {ytVideo.viewCount !== null && ` · ${ytVideo.viewCount.toLocaleString()} views`}
-              {ytVideo.likeCount !== null && ` · ${ytVideo.likeCount.toLocaleString()} likes`}
-            </p>
-            {ytVideo.tags.length > 0 && (
-              <p className="muted" style={{ margin: "4px 0", fontSize: 12 }}>
-                Tags: {ytVideo.tags.slice(0, 8).join(", ")}
-              </p>
-            )}
-            {ytVideo.description && (
-              <p className="muted" style={{ margin: "8px 0 0", fontSize: 13, whiteSpace: "pre-wrap" }}>
-                {ytVideo.description.slice(0, 320)}{ytVideo.description.length > 320 ? "…" : ""}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="row" style={{ marginTop: 32, justifyContent: "space-between", alignItems: "center" }}>
         <h2 style={{ margin: 0 }}>Recent briefs</h2>
@@ -278,25 +144,50 @@ export default function Home() {
       </div>
       <div className="grid">
         {briefs.length === 0 && <p className="muted">No briefs yet — pick a creator above.</p>}
-        {briefs.map((b) => (
-          <Link key={b.id} href={`/briefs/${b.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-            <div className="card" style={{ cursor: "pointer" }}>
-              <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                <span className={`badge badge-${b.status}`}>{b.status.replace(/_/g, " ")}</span>
-                <span className="muted">{new Date(b.created_at).toLocaleTimeString()}</span>
+        {briefs.map((b) => {
+          const readyFrames = (b.frames ?? []).filter((f) => f.image_url);
+          const approved = (b.frames ?? []).filter((f) => f.status === "approved").length;
+          return (
+            <Link key={b.id} href={`/briefs/${b.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+              <div className="card" style={{ cursor: "pointer" }}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <span className={`badge badge-${b.status}`}>{b.status.replace(/_/g, " ")}</span>
+                  <span className="muted">{new Date(b.created_at).toLocaleString()}</span>
+                </div>
+                <p style={{ margin: "10px 0 2px", fontSize: 14, fontWeight: 600 }}>
+                  @{b.creator_handle} · {b.product_id} · {b.target_duration_s}s
+                </p>
+                {b.storyboard?.hook && (
+                  <p className="muted" style={{ marginTop: 4, fontStyle: "italic" }}>"{b.storyboard.hook}"</p>
+                )}
+                {b.storyboard && (
+                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                    {b.storyboard.shots.length} shots · {b.storyboard.total_duration_s}s
+                    {b.frames && b.frames.length > 0 ? ` · ${readyFrames.length}/${b.frames.length} frames ready · ${approved} approved` : ""}
+                  </p>
+                )}
+                {readyFrames.length > 0 && (
+                  <div className="row" style={{ marginTop: 8, gap: 4 }}>
+                    {readyFrames.slice(0, 6).map((f) => (
+                      <img
+                        key={f.shot_idx}
+                        src={f.image_url}
+                        alt=""
+                        style={{ width: 40, height: 71, objectFit: "cover", borderRadius: 4, background: "#000" }}
+                      />
+                    ))}
+                  </div>
+                )}
+                {b.youtube_ref && (
+                  <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>📎 YT ref: {b.youtube_ref.title.slice(0, 60)}</p>
+                )}
+                {b.error && (
+                  <p style={{ color: "#ff6b6b", fontSize: 11, marginTop: 8 }}>{b.error.slice(0, 120)}</p>
+                )}
               </div>
-              <p style={{ margin: "10px 0 4px", fontSize: 14, fontWeight: 600 }}>
-                @{b.creator_handle} · {b.product_id}
-              </p>
-              {b.storyboard?.hook && (
-                <p className="muted" style={{ marginTop: 4, fontStyle: "italic" }}>"{b.storyboard.hook}"</p>
-              )}
-              {b.storyboard && (
-                <p className="muted">{b.storyboard.shots.length} shots · {b.storyboard.total_duration_s}s</p>
-              )}
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
       </div>
 
       <h2 style={{ marginTop: 32 }}>Top creators by GMV</h2>
@@ -331,36 +222,6 @@ export default function Home() {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-function Borrowed({ repo, license, source, ports }: {
-  repo: string;
-  license: string;
-  source: string;
-  ports: { file: string; desc: string }[];
-}) {
-  const repoUrl = repo.startsWith("(") ? null : `https://github.com/${repo}`;
-  return (
-    <div className="card">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-        <strong style={{ fontSize: 14 }}>
-          {repoUrl ? (
-            <a href={repoUrl} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>{repo}</a>
-          ) : repo}
-        </strong>
-        <span className="muted" style={{ fontSize: 11 }}>{license}</span>
-      </div>
-      <p className="muted" style={{ margin: "4px 0 12px", fontSize: 12, fontFamily: "monospace" }}>{source}</p>
-      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
-        {ports.map((p) => (
-          <li key={p.file} style={{ marginBottom: 6 }}>
-            <code style={{ fontSize: 12 }}>{p.file}</code>
-            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{p.desc}</div>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
