@@ -68,38 +68,105 @@ export async function sendWhatsAppVideos(input: SendInput): Promise<SendResult> 
   // Hard gate — refuse non-allowlisted recipients when TEST_MODE is on.
   assertRecipientAllowed(to);
 
-  // Send caption + first video as the main message; trail with the rest.
-  const first = input.media_urls[0];
+  // First message: the lead video + caption. Body shape matches Periskope's
+  // documented `/message/send` schema (chat_id + message + media), verified
+  // 2026-05 against https://docs.periskope.app/api-reference/message/send-message.md
+  const chat_id = `${to}@c.us`;
   const main = await postMessage({
     key,
     from,
-    to,
-    type: "video",
     body: {
-      to,
-      phone: from,
-      type: "video",
-      video: { link: first, caption: input.caption },
+      chat_id,
+      message: input.caption,
+      media: {
+        type: "video",
+        url: input.media_urls[0],
+        filename: filenameFromUrl(input.media_urls[0]),
+        mimetype: "video/mp4",
+      },
     },
   });
   for (const url of input.media_urls.slice(1)) {
     await postMessage({
       key,
       from,
-      to,
-      type: "video",
-      body: { to, phone: from, type: "video", video: { link: url } },
+      body: {
+        chat_id,
+        media: {
+          type: "video",
+          url,
+          filename: filenameFromUrl(url),
+          mimetype: "video/mp4",
+        },
+      },
     });
   }
   return { message_id: main.message_id, to };
 }
 
-async function postMessage(opts: { key: string; from: string; to: string; type: string; body: any }): Promise<{ message_id: string }> {
-  const url = `${PERISKOPE_BASE}/messages`;
+// Single-shot helper for the "creator handoff" flow — sends the stitched
+// final mp4 as one media message with the public handoff URL as the caption.
+export type HandoffInput = {
+  to: string;
+  video_url: string;        // absolute HTTPS URL Periskope can fetch
+  filename?: string;        // shown in WhatsApp as the file name
+  handoff_url: string;      // public-readable HTML brief page
+  caption_lead?: string;    // first line of the message (e.g. the hook in quotes)
+};
+
+export async function sendCreatorHandoff(input: HandoffInput): Promise<SendResult> {
+  const key = process.env.PERISKOPE_API_KEY;
+  const from = process.env.PERISKOPE_PHONE;
+  if (!key) throw new Error("PERISKOPE_API_KEY not set");
+  if (!from) throw new Error("PERISKOPE_PHONE not set");
+  if (!input.video_url) throw new Error("video_url required");
+  const to = normalizePhone(input.to);
+  assertRecipientAllowed(to);
+
+  const lead = (input.caption_lead ?? "").trim();
+  const message = [
+    lead ? `${lead}\n` : "",
+    "Your brief is ready. Tap the video to preview, or open the full brief + download here:",
+    input.handoff_url,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const result = await postMessage({
+    key,
+    from,
+    body: {
+      chat_id: `${to}@c.us`,
+      message,
+      media: {
+        type: "video",
+        url: input.video_url,
+        filename: input.filename ?? filenameFromUrl(input.video_url),
+        mimetype: "video/mp4",
+      },
+    },
+  });
+  return { message_id: result.message_id, to };
+}
+
+function filenameFromUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const last = u.pathname.split("/").pop() || "";
+    if (last && /\.mp4$/i.test(last)) return last;
+  } catch {
+    // not a URL — fall through
+  }
+  return `brief-${Date.now()}.mp4`;
+}
+
+async function postMessage(opts: { key: string; from: string; body: any }): Promise<{ message_id: string }> {
+  const url = `${PERISKOPE_BASE}/message/send`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${opts.key}`,
+      "x-phone": opts.from,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(opts.body),
@@ -109,7 +176,10 @@ async function postMessage(opts: { key: string; from: string; to: string; type: 
     throw new Error(`Periskope ${res.status}: ${t.slice(0, 400)}`);
   }
   const data = await res.json().catch(() => ({}));
-  const id = data?.message_id ?? data?.id ?? data?.messages?.[0]?.id ?? `periskope_${Date.now()}`;
+  // Periskope returns `unique_id` (the WhatsApp ID) + `queue_id` (their internal
+  // job). We prefer unique_id since it tracks the actual message state via
+  // GET /messages/<unique_id>/status.
+  const id = data?.unique_id ?? data?.queue_id ?? data?.message_id ?? data?.id ?? `periskope_${Date.now()}`;
   return { message_id: String(id) };
 }
 
