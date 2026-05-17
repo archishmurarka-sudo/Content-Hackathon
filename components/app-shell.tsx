@@ -40,10 +40,12 @@ const STATIC_LINKS: { href: string; label: string; icon: React.ComponentType<any
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isStandalone = pathname === "/login";
   const [usage, setUsage] = useState<Usage | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
 
   useEffect(() => {
+    if (isStandalone) return;
     let alive = true;
     async function load() {
       const [u, h] = await Promise.all([
@@ -57,7 +59,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     load();
     const t = setInterval(load, 10_000);
     return () => { alive = false; clearInterval(t); };
-  }, []);
+  }, [isStandalone]);
+
+  // Login page renders standalone — no sidebar/topbar chrome.
+  if (isStandalone) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="app-shell">
