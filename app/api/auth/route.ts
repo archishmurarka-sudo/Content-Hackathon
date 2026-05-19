@@ -6,7 +6,10 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const expected = dashboardPassword();
   const body = await req.json().catch(() => ({}));
-  if (body.password !== expected) {
+  // Defensive: trim leading/trailing whitespace so auto-fill or copy-paste
+  // padding doesn't silently fail the comparison.
+  const submitted = String(body.password ?? "").trim();
+  if (submitted !== expected) {
     return NextResponse.json({ ok: false, error: "wrong password" }, { status: 401 });
   }
   const res = NextResponse.json({ ok: true });
