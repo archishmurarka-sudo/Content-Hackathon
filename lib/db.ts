@@ -58,6 +58,7 @@ export async function ensureSchema(): Promise<void> {
     await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS delivery JSONB;`;
     await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS final_video_url TEXT;`;
     await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS final_video_key TEXT;`;
+    await s`ALTER TABLE briefs ADD COLUMN IF NOT EXISTS funnel_stage TEXT;`;
     await s`CREATE INDEX IF NOT EXISTS briefs_created_at_idx ON briefs (created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS briefs_status_idx ON briefs (status);`;
     // Creators added at runtime via the TikTok-scrape onboarding flow.
@@ -98,6 +99,27 @@ export async function ensureSchema(): Promise<void> {
     await s`CREATE INDEX IF NOT EXISTS events_brief_idx ON events (brief_id, created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS events_type_idx ON events (type);`;
     await s`CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at DESC);`;
+
+    // Meta direct-response ad scripts. Decoupled from the TikTok UGC briefs
+    // table — the Scripts feature has different inputs (style + placement +
+    // competitor refs, no creator) and a different output shape (10-column
+    // CSV row per Noa's template).
+    await s`
+      CREATE TABLE IF NOT EXISTS ad_scripts (
+        id          TEXT PRIMARY KEY,
+        product_id  TEXT NOT NULL,
+        batch_id    TEXT NOT NULL,
+        script_kind TEXT NOT NULL,
+        style       TEXT,
+        placement   TEXT,
+        source_ref  TEXT,
+        script_csv  JSONB NOT NULL,
+        approved    BOOLEAN DEFAULT FALSE,
+        created_at  BIGINT NOT NULL
+      );
+    `;
+    await s`CREATE INDEX IF NOT EXISTS ad_scripts_product_idx ON ad_scripts (product_id, created_at DESC);`;
+    await s`CREATE INDEX IF NOT EXISTS ad_scripts_batch_idx ON ad_scripts (batch_id);`;
   })();
   return g.__schemaReady;
 }

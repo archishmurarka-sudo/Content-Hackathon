@@ -34,7 +34,9 @@ type ResearchBrief = {
 
 type AdScript = {
   id: string;
-  script_kind: "swipe" | "original" | "testimonial" | "listicle";
+  script_kind: string;
+  style?: string | null;
+  placement?: string | null;
   source_ref: string | null;
   script_csv: Record<string, string>;
   approved: boolean;
@@ -120,10 +122,44 @@ export default function ScriptsPage() {
     setGenerating(false);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error("Generation not wired yet", data?.error ?? data?.hint ?? `HTTP ${res.status}`);
+      toast.error("Generation failed", data?.error ?? `HTTP ${res.status}`);
       return;
     }
-    toast.success("Scripts generated", `${data?.count ?? 0} new scripts`);
+    toast.success(`Generated ${data?.count ?? 0} scripts`, `Saved to ${selectedProduct?.name}`);
+    // Refresh the list.
+    fetch(`/api/scripts?product_id=${encodeURIComponent(selectedProductId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setScripts(d.scripts ?? []))
+      .catch(() => {});
+  }
+
+  async function toggleApprove(id: string, approved: boolean) {
+    const res = await fetch(`/api/scripts/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approved }),
+    });
+    if (!res.ok) {
+      toast.error("Couldn't update", `HTTP ${res.status}`);
+      return;
+    }
+    setScripts((prev) => prev.map((s) => (s.id === id ? { ...s, approved } : s)));
+  }
+
+  async function removeScript(id: string) {
+    if (!confirm("Delete this script?")) return;
+    const res = await fetch(`/api/scripts/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("Couldn't delete", `HTTP ${res.status}`);
+      return;
+    }
+    setScripts((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function downloadCsv(onlyApproved: boolean) {
+    if (!selectedProductId) return;
+    const url = `/api/scripts/export?product_id=${encodeURIComponent(selectedProductId)}${onlyApproved ? "&only_approved=1" : ""}`;
+    window.location.href = url;
   }
 
   return (
@@ -357,47 +393,34 @@ export default function ScriptsPage() {
             <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
               <div>
                 <span className="eyebrow">Output</span>
-                <h2 style={{ marginTop: 4 }}>Scripts for {selectedProduct?.name}</h2>
+                <h2 style={{ marginTop: 4 }}>Scripts for {selectedProduct?.name} <span className="muted-sm" style={{ fontWeight: 400 }}>· {scripts.length} total</span></h2>
               </div>
               {scripts.length > 0 && (
-                <button className="btn-ghost btn-sm">Export to Google Sheet</button>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn-ghost btn-sm" onClick={() => downloadCsv(true)} title="Approved scripts only">
+                    ↓ Approved CSV
+                  </button>
+                  <button className="btn-ghost btn-sm" onClick={() => downloadCsv(false)}>
+                    ↓ All CSV
+                  </button>
+                </div>
               )}
             </div>
             {scripts.length === 0 ? (
               <div className="card" style={{ textAlign: "center", padding: 32, color: "var(--muted)" }}>
                 No scripts generated yet. The brief above is ready — click <strong style={{ color: "var(--text-2)" }}>Generate</strong> to spin a batch.
-                <div className="muted-sm" style={{ marginTop: 6 }}>
-                  (Generator wires next; the UI ships first to validate the shape.)
-                </div>
               </div>
             ) : (
-              <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 60 }}>#</th>
-                      <th>Style</th>
-                      <th>Hook</th>
-                      <th>Body</th>
-                      <th style={{ width: 90 }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scripts.map((s, i) => (
-                      <tr key={s.id}>
-                        <td className="mono muted-sm">{String(i + 1).padStart(2, "0")}</td>
-                        <td><span className="badge">{s.script_kind.replace(/_/g, " ")}</span></td>
-                        <td style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {s.script_csv?.["Building Block"] ?? "—"}
-                        </td>
-                        <td style={{ maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {s.script_csv?.["Script/Voiceover"] ?? "—"}
-                        </td>
-                        <td>{s.approved ? <span className="badge badge-succeeded">approved</span> : <span className="badge badge-pending">pending</span>}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+                {scripts.map((s, i) => (
+                  <ScriptCard
+                    key={s.id}
+                    index={i + 1}
+                    script={s}
+                    onToggle={() => toggleApprove(s.id, !s.approved)}
+                    onDelete={() => removeScript(s.id)}
+                  />
+                ))}
               </div>
             )}
           </section>
@@ -430,5 +453,83 @@ function Tag({ children }: { children: React.ReactNode }) {
     <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)", textTransform: "none" }}>
       {children}
     </span>
+  );
+}
+
+function ScriptCard({
+  index,
+  script,
+  onToggle,
+  onDelete,
+}: {
+  index: number;
+  script: AdScript;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const csv = script.script_csv ?? {};
+  return (
+    <div className="card" style={{ padding: 14, borderColor: script.approved ? "var(--accent)" : "var(--border)", background: script.approved ? "var(--accent-soft)" : undefined }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="row" style={{ gap: 8, alignItems: "center" }}>
+            <span className="mono muted-sm">#{String(index).padStart(2, "0")}</span>
+            <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>
+              {script.script_kind.replace(/_/g, " ")}
+            </span>
+            {script.placement && script.placement !== "mixed" && (
+              <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>{script.placement}</span>
+            )}
+            {script.approved && <span className="badge badge-succeeded">approved</span>}
+          </div>
+          <div style={{ marginTop: 8, fontWeight: 600 }}>{csv["Building Block"] ?? "—"}</div>
+          <div style={{ marginTop: 4, fontSize: 14, lineHeight: 1.5 }}>
+            {csv["Script/Voiceover"] ?? "—"}
+          </div>
+          {csv["Text on Screen"] && (
+            <div className="muted-sm" style={{ marginTop: 6 }}>
+              <strong style={{ color: "var(--text-2)" }}>On screen:</strong> {csv["Text on Screen"]}
+            </div>
+          )}
+        </div>
+        <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+          <button className="btn-ghost btn-sm" onClick={() => setExpanded((e) => !e)}>
+            {expanded ? "Hide" : "Details"}
+          </button>
+          <button
+            className="btn-sm"
+            onClick={onToggle}
+            style={script.approved
+              ? { background: "transparent", color: "var(--text-2)", borderColor: "var(--border)" }
+              : { background: "var(--accent)", color: "var(--bg)", borderColor: "var(--accent)" }}
+          >
+            {script.approved ? "Unapprove" : "Approve"}
+          </button>
+          <button className="btn-sm btn-danger" onClick={onDelete} title="Delete">×</button>
+        </div>
+      </div>
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, fontSize: 13 }}>
+            <Detail label="Scene Recording Style" value={csv["Scene Recording Style"]} />
+            <Detail label="Production" value={csv["Production"]} />
+            <Detail label="Editor Note" value={csv["Editor Note"]} />
+            <Detail label="Visual Ref" value={csv["Visual Ref"]} />
+            <Detail label="Execution Type" value={csv["Execution Type"]} />
+            <Detail label="Ad Reference URL" value={csv["Ad Reference URL"]} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string | undefined }) {
+  return (
+    <div>
+      <div className="muted-sm" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{label}</div>
+      <div style={{ marginTop: 2 }}>{value || <span className="muted-sm">—</span>}</div>
+    </div>
   );
 }
