@@ -13,6 +13,9 @@
 
 import { putAsset, readAsset, type PutResult } from "./storage";
 import { bump } from "./usage";
+import { extractPromoSignals, renderPromoBlockForImage } from "./promo-signals";
+import type { ScriptEnrichment } from "./connoisseur_enrichment";
+import { renderVisualIntelligenceForImage } from "./connoisseur_enrichment";
 
 const OPENAI_BASE = "https://api.openai.com/v1";
 
@@ -315,6 +318,13 @@ function absolutizeAssetUrl(url: string): string {
 // Builds an image prompt for a single keyframe of a Meta-script storyboard.
 // Used by the 5-keyframe-per-script generator so each frame is concrete and
 // distinct (instead of every script sharing one generic "lead image").
+//
+// The `persona` argument is the SAME on every call for a given storyboard —
+// it locks the human protagonist's identity (age, gender, ethnicity, hair,
+// wardrobe, vibe, setting, lighting, camera) so all 5 keyframes look like
+// one continuous ad starring one specific person, not five unrelated stock
+// shots. When omitted (legacy path) the prompt falls back to a soft "same
+// subject" assertion.
 export function buildPromptForKeyframe(args: {
   beat: { idx: number; timestamp_s: number; voiceover: string; visual: string };
   total_beats: number;
@@ -325,13 +335,19 @@ export function buildPromptForKeyframe(args: {
   product_one_liner?: string;
   placement?: string | null;
   hero_image_url?: string | null;
+  // Locked human protagonist (from script-beats.ts). When present, rendered
+  // verbatim as a CAST LOCK block on every keyframe.
+  persona_block?: string | null;
+  // Optional Connoisseur corpus payload — surfaces winner_combos, archetypes,
+  // and voice-atom mood cues as visual guidance. Skipped silently when null.
+  enrichment?: ScriptEnrichment | null;
 }): string {
   const placement = (args.placement ?? "mixed").toLowerCase();
   const isPortrait = placement !== "feed";
 
   const aestheticBlock = isPortrait
-    ? "Aesthetic: vertical 9:16 Meta Reels / Stories keyframe. UGC-style, handheld, natural daylight or warm interior. Subject and product clearly visible. Not a polished studio ad."
-    : "Aesthetic: clean, mobile-first Meta Feed keyframe. Square 1:1 composition, high contrast, sound-off-friendly. Real-feeling, not stock.";
+    ? "Aesthetic: vertical 9:16 Meta Reels / Stories keyframe. UGC-style, handheld, natural daylight or warm interior. Subject and product clearly visible. Not a polished studio ad — looks like a real iPhone photo a creator took at home."
+    : "Aesthetic: clean, mobile-first Meta Feed keyframe. Square 1:1 composition, high contrast, sound-off-friendly. Real-feeling — like a candid creator photo, not a stock product shot.";
 
   const referenceLock = args.hero_image_url
     ? [
@@ -341,6 +357,26 @@ export function buildPromptForKeyframe(args: {
       ]
     : [];
 
+  const personaBlock = args.persona_block
+    ? [args.persona_block, ""]
+    : [];
+
+  // Connoisseur visual intelligence — empty string if no corpus data, so we
+  // skip the block instead of emitting blank whitespace.
+  const corpusVisual = renderVisualIntelligenceForImage(args.enrichment ?? null);
+  const corpusBlock = corpusVisual ? [corpusVisual, ""] : [];
+
+  // Pull any promo signals out of the beat's voiceover or visual line — the
+  // hook frame is exactly where a sale price / event name needs to land.
+  const beatPromo = extractPromoSignals(
+    [args.beat.voiceover, args.beat.visual].filter(Boolean).join(" \n ")
+  );
+  const beatPromoBlock = renderPromoBlockForImage(beatPromo);
+  // Promo typography belongs on the HOOK keyframe (idx 0) and optionally the
+  // closer; carrying it across every keyframe makes the storyboard feel like
+  // a billboard montage instead of a story.
+  const showPromoHere = beatPromo.has && (args.beat.idx === 0 || args.beat.idx === args.total_beats - 1);
+
   const lines = [
     aestheticBlock,
     "",
@@ -348,18 +384,25 @@ export function buildPromptForKeyframe(args: {
     args.product_one_liner ? `WHAT IT IS: ${args.product_one_liner}` : "",
     "",
     ...referenceLock,
+    ...personaBlock,
+    ...corpusBlock,
     `KEYFRAME ${args.beat.idx + 1} of ${args.total_beats} — moment ${args.beat.timestamp_s}s of ${args.total_duration_s}s`,
     args.beat.voiceover ? `LINE BEING SPOKEN: "${args.beat.voiceover}"` : "(silent / ambient beat)",
     "",
-    "SCENE",
+    "ACTION THIS FRAME (only the protagonist's action changes — identity, wardrobe, setting are locked above)",
     args.beat.visual,
     "",
+    showPromoHere ? beatPromoBlock + "\n" : "",
     "STRICT RULES",
-    "- DO NOT render any text, captions, overlays, watermarks, app UI, or brand logos other than the actual product label.",
-    "- DO NOT use AI-art, illustration, anime, or 3D render styles — this must look like a real phone photo or studio still.",
-    "- Maintain the SAME subject, SAME setting, SAME lighting palette across keyframes — this is one continuous ad. Only the action and framing change beat to beat.",
+    showPromoHere
+      ? "- The PROMO OVERLAY block above is the headline of this beat — render the listed price / event / discount as large in-frame typography. Other text (captions, watermarks, app UI) must NOT be drawn."
+      : "- DO NOT render any text, captions, overlays, watermarks, app UI, or brand logos other than the actual product label.",
+    "- DO NOT use AI-art, illustration, anime, or 3D render styles — this must look like a real phone photo a creator took.",
+    args.persona_block
+      ? "- Protagonist identity (face, age, ethnicity, hair, wardrobe), setting, and lighting MUST match the CAST LOCK block above exactly. If your draft introduces a different person, restart from the CAST LOCK."
+      : "- Maintain the SAME subject, SAME setting, SAME lighting palette across keyframes — this is one continuous ad. Only the action and framing change beat to beat.",
     "- Product must be recognizable in frame. The label must be readable enough to identify the brand.",
-    "- Composition: eye-level, mobile-first framing.",
+    "- Composition: eye-level, mobile-first framing. Real human presence — show face and hands when relevant, not just product-on-counter.",
   ];
 
   return lines.filter(Boolean).join("\n");
@@ -379,6 +422,7 @@ export function buildPromptForAdScript(args: {
   hero_image_url?: string | null;   // When present, the caller routes via
                                     // /images/edits with this as the reference
                                     // — prompt below acknowledges the lock.
+  enrichment?: ScriptEnrichment | null;  // Optional Connoisseur visual intel.
 }): { prompt: string; aspect: ImageAspect } {
   const csv = args.script_csv;
   const hook = (csv["Building Block"] ?? "").trim();
@@ -403,6 +447,18 @@ export function buildPromptForAdScript(args: {
       ]
     : [];
 
+  const corpusVisual = renderVisualIntelligenceForImage(args.enrichment ?? null);
+  const corpusBlock = corpusVisual ? [corpusVisual, ""] : [];
+
+  // Mine the script row itself for promo signals. The operator's price /
+  // event tokens are usually embedded in the hook, voiceover, or
+  // text-on-screen column — without this we'd silently summarize them away
+  // and the generated image would not show the actual price the script is
+  // built around.
+  const promoSource = [hook, voiceover, visualRef, textOnScreen].filter(Boolean).join(" \n ");
+  const promo = extractPromoSignals(promoSource);
+  const promoBlock = renderPromoBlockForImage(promo);
+
   const lines = [
     aestheticBlock,
     "",
@@ -410,14 +466,18 @@ export function buildPromptForAdScript(args: {
     args.product_one_liner ? `WHAT IT IS: ${args.product_one_liner}` : "",
     "",
     ...referenceLock,
+    ...corpusBlock,
     "SCENE",
     visualRef || voiceover || hook || "Hero product shot on a kitchen counter, morning light.",
     "",
     hook ? `MOMENT: ${hook}` : "",
     "",
+    promoBlock ? promoBlock + "\n" : "",
     "STRICT RULES",
-    "- DO NOT render any text, captions, overlays, watermarks, app UI, or 'Meta' branding in the image — overlays added in post.",
-    textOnScreen ? `- The overlay text \"${textOnScreen}\" will be added separately; leave clean negative space at the top for it. Do NOT draw the text yourself.` : "",
+    promo.has
+      ? "- The PROMO OVERLAY block above is the headline of this ad — render the listed price / event / discount as large in-frame typography. Other text (captions, watermarks, app UI, Meta branding) must NOT be drawn."
+      : "- DO NOT render any text, captions, overlays, watermarks, app UI, or 'Meta' branding in the image — overlays added in post.",
+    textOnScreen && !promo.has ? `- The overlay text \"${textOnScreen}\" will be added separately; leave clean negative space at the top for it. Do NOT draw the text yourself.` : "",
     "- DO NOT use AI-art, illustration, anime, or 3D render styles — this must look like a real phone photo or studio still.",
     "- DO NOT add logos other than the actual product label.",
     "- Composition: product and any human subject clearly visible, eye-level framing.",

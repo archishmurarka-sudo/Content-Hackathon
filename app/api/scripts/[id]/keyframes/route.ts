@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAuthed } from "@/lib/auth";
 import { getScript, setScriptKeyframes, type ScriptKeyframe } from "@/lib/ad-scripts";
 import { ensureProductsLoaded, findProduct } from "@/lib/data";
-import { decomposeScriptIntoBeats } from "@/lib/script-beats";
+import { decomposeScriptIntoBeats, renderPersonaForKeyframe } from "@/lib/script-beats";
+import { fetchScriptEnrichment } from "@/lib/connoisseur_enrichment";
 import { generateAdImage, buildPromptForKeyframe } from "@/lib/openai-images";
 
 export const runtime = "nodejs";
@@ -40,20 +41,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   await setScriptKeyframes(id, { keyframes_status: "pending" });
 
-  // 1) Decompose script → 5 beats via Gemini.
-  let beats;
+  // 0) Pull Connoisseur archetype + voice data (if the product has a corpus)
+  //    so the protagonist pick is biased toward casting that actually wins
+  //    for this brand. Soft-fails — MCP downtime never blocks the storyboard.
+  const enrichment = await fetchScriptEnrichment(product).catch(() => undefined);
+
+  // 1) Decompose script → 5 beats + ONE locked protagonist via Gemini.
+  let decomposed;
   try {
-    beats = await decomposeScriptIntoBeats({
+    decomposed = await decomposeScriptIntoBeats({
       script_csv: script.script_csv as Record<string, string>,
       product_name: product.name,
       product_brand: product.brand,
+      audience_primary: product.audience_primary ?? null,
+      audience_secondary: product.audience_secondary ?? null,
       count: KEYFRAME_COUNT,
       total_duration_s: TOTAL_DURATION_S,
+      enrichment,
     });
   } catch (err: any) {
     await setScriptKeyframes(id, { keyframes_status: "failed" });
     return NextResponse.json({ error: `beat decomposition failed: ${err?.message ?? err}` }, { status: 502 });
   }
+  const { persona, beats, prompt: beatsPrompt, model: beatsModel } = decomposed;
+  const personaBlock = renderPersonaForKeyframe(persona);
 
   // 2) Seed the array with pending entries so the UI can render the strip
   //    immediately.
@@ -68,7 +79,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     status: "pending",
     error: null,
   }));
-  await setScriptKeyframes(id, { keyframes: seed, keyframes_status: "pending" });
+  await setScriptKeyframes(id, {
+    keyframes: seed,
+    keyframes_status: "pending",
+    persona,
+    beats_prompt: beatsPrompt,
+    beats_model: beatsModel,
+  });
 
   // 3) Generate one image per beat. Concurrency-limited so we don't burst
   //    OpenAI; results streamed back into the keyframes array as each
@@ -89,6 +106,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           product_one_liner: product.one_liner,
           placement: script.placement,
           hero_image_url: product.hero_image_url ?? null,
+          persona_block: personaBlock,
+          enrichment,
         });
         try {
           const img = await generateAdImage({

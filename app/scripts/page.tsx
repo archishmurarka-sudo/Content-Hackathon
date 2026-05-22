@@ -52,6 +52,7 @@ type AdScript = {
   video_status?: "idle" | "pending" | "ready" | "failed";
   video_url?: string | null;
   video_model?: string | null;
+  video_prompt?: string | null;
   video_error?: string | null;
   keyframes?: {
     idx: number;
@@ -78,6 +79,8 @@ type AdScript = {
   } | null;
   generation_prompt?: string | null;
   generation_model?: string | null;
+  beats_prompt?: string | null;
+  beats_model?: string | null;
   created_at: number;
 };
 
@@ -906,6 +909,24 @@ function ScriptCard({
             {script.video_error && (
               <p style={{ color: "#ff6b6b", fontSize: 10, marginTop: 4 }}>{script.video_error}</p>
             )}
+            {script.video_prompt && (
+              <details style={{ marginTop: 6, fontSize: 10 }}>
+                <summary style={{ cursor: "pointer", color: "var(--muted-2)" }}>
+                  view video prompt
+                  {script.video_model && <span style={{ marginLeft: 6 }}>· {script.video_model}</span>}
+                </summary>
+                <pre
+                  style={{
+                    marginTop: 4, padding: 6, background: "var(--surface-2)", borderRadius: 4,
+                    fontSize: 9, lineHeight: 1.3, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    maxHeight: 240, overflowY: "auto",
+                    fontFamily: "var(--font-mono, ui-monospace, monospace)", color: "var(--text-2)",
+                  }}
+                >
+                  {script.video_prompt}
+                </pre>
+              </details>
+            )}
           </div>
         </div>
 
@@ -1036,6 +1057,26 @@ function ScriptCard({
               <div><strong>Lighting:</strong> {script.persona.lighting}</div>
               <div><strong>Camera:</strong> {script.persona.camera_style}</div>
             </div>
+          </details>
+        )}
+        {script.beats_prompt && (
+          <details style={{ marginBottom: 10, fontSize: 11 }}>
+            <summary style={{ cursor: "pointer", color: "var(--muted)", fontWeight: 600 }}>
+              📝 View beat-decomposition prompt (Gemini call that picked the persona + 5 beats)
+              {script.beats_model && (
+                <span className="muted-sm" style={{ marginLeft: 8, fontWeight: 400 }}>· model: {script.beats_model}</span>
+              )}
+            </summary>
+            <pre
+              style={{
+                marginTop: 6, padding: 10, background: "var(--surface-2)", borderRadius: 6,
+                fontSize: 10, lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                maxHeight: 360, overflowY: "auto",
+                fontFamily: "var(--font-mono, ui-monospace, monospace)", color: "var(--text-2)",
+              }}
+            >
+              {script.beats_prompt}
+            </pre>
           </details>
         )}
         {hasKeyframes && (

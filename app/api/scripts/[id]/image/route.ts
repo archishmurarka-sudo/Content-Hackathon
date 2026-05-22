@@ -11,6 +11,7 @@ import { isAuthed } from "@/lib/auth";
 import { getScript, setScriptImage } from "@/lib/ad-scripts";
 import { ensureProductsLoaded, findProduct } from "@/lib/data";
 import { generateAdImage, buildPromptForAdScript } from "@/lib/openai-images";
+import { fetchScriptEnrichment } from "@/lib/connoisseur_enrichment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   await setScriptImage(id, { image_status: "pending", image_error: null });
 
+  // Pull Connoisseur visual intel (winner formats, archetypes, voice mood)
+  // — soft-fails so MCP downtime never blocks the image render.
+  const enrichment = await fetchScriptEnrichment(product).catch(() => undefined);
+
   const { prompt, aspect } = buildPromptForAdScript({
     script_csv: script.script_csv as Record<string, string>,
     product_name: product.name,
@@ -40,6 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     product_one_liner: product.one_liner,
     placement: script.placement,
     hero_image_url: product.hero_image_url ?? null,
+    enrichment,
   });
 
   try {

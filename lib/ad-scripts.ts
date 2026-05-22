@@ -3,6 +3,7 @@
 
 import { hasDb, sql, ensureSchema } from "./db";
 import type { GeneratedScript, CsvRow } from "./script-generator";
+import type { ScriptPersona } from "./script-beats";
 
 export type ImageStatus = "idle" | "pending" | "ready" | "failed";
 export type VideoStatus = "idle" | "pending" | "ready" | "failed";
@@ -48,6 +49,20 @@ export type AdScript = {
   // so it feeds the Veo first-frame.
   keyframes?: ScriptKeyframe[] | null;
   keyframes_status?: KeyframesStatus;
+  // Locked human protagonist (age, gender, ethnicity, wardrobe, vibe, setting,
+  // lighting, camera) — stamped onto every keyframe in this script's storyboard
+  // so all 5 frames star the same person. Persisted so the UI can show the
+  // operator who got cast and so regen can reuse the same persona.
+  persona?: ScriptPersona | null;
+  // The exact prompt that was sent to Gemini when this script was generated,
+  // including the LIVE INTELLIGENCE FROM THE CONNOISSEUR CORPUS block when
+  // enrichment was on. Surfaced in the UI ("view prompt" on each script) so
+  // the operator can verify what corpus data landed in the request.
+  generation_prompt?: string | null;
+  generation_model?: string | null;
+  // Prompt sent to Gemini at the beat-decomposition / persona-pick stage.
+  beats_prompt?: string | null;
+  beats_model?: string | null;
   created_at: number;
 };
 
@@ -67,6 +82,11 @@ export async function insertScripts(args: {
   product_id: string;
   batch_id: string;
   scripts: GeneratedScript[];
+  // Same prompt across the whole batch — captured once so a "view prompt"
+  // operator action can show exactly what fed Gemini for any script in the
+  // batch (including the Connoisseur enrichment block).
+  generation_prompt?: string | null;
+  generation_model?: string | null;
 }): Promise<AdScript[]> {
   const now = Date.now();
   const rows: AdScript[] = args.scripts.map((g) => ({
@@ -79,6 +99,8 @@ export async function insertScripts(args: {
     source_ref: g.source_ref,
     script_csv: g.csv,
     approved: false,
+    generation_prompt: args.generation_prompt ?? null,
+    generation_model: args.generation_model ?? null,
     created_at: now,
   }));
 
@@ -87,8 +109,8 @@ export async function insertScripts(args: {
     const s = sql();
     for (const r of rows) {
       await s`
-        INSERT INTO ad_scripts (id, product_id, batch_id, script_kind, style, placement, source_ref, script_csv, approved, created_at)
-        VALUES (${r.id}, ${r.product_id}, ${r.batch_id}, ${r.script_kind}, ${r.style}, ${r.placement}, ${r.source_ref}, ${s.json(r.script_csv as any)}, ${r.approved}, ${r.created_at})
+        INSERT INTO ad_scripts (id, product_id, batch_id, script_kind, style, placement, source_ref, script_csv, approved, generation_prompt, generation_model, created_at)
+        VALUES (${r.id}, ${r.product_id}, ${r.batch_id}, ${r.script_kind}, ${r.style}, ${r.placement}, ${r.source_ref}, ${s.json(r.script_csv as any)}, ${r.approved}, ${r.generation_prompt ?? null}, ${r.generation_model ?? null}, ${r.created_at})
       `;
     }
     return rows;
@@ -186,6 +208,12 @@ export async function setScriptKeyframes(
     image_key?: string | null;
     image_status?: ImageStatus;
     image_prompt?: string | null;
+    // Locked human protagonist for this script's storyboard.
+    persona?: ScriptPersona | null;
+    // Beat-decomposition prompt + model (Gemini Flash call that returned
+    // persona + beats).
+    beats_prompt?: string | null;
+    beats_model?: string | null;
   }
 ): Promise<AdScript | undefined> {
   if (hasDb()) {
@@ -198,7 +226,10 @@ export async function setScriptKeyframes(
         image_url        = COALESCE(${patch.image_url ?? null}, image_url),
         image_key        = COALESCE(${patch.image_key ?? null}, image_key),
         image_status     = COALESCE(${patch.image_status ?? null}, image_status),
-        image_prompt     = COALESCE(${patch.image_prompt ?? null}, image_prompt)
+        image_prompt     = COALESCE(${patch.image_prompt ?? null}, image_prompt),
+        persona          = COALESCE(${patch.persona === undefined ? null : s.json(patch.persona as any)}, persona),
+        beats_prompt     = COALESCE(${patch.beats_prompt ?? null}, beats_prompt),
+        beats_model      = COALESCE(${patch.beats_model ?? null}, beats_model)
       WHERE id = ${id}
     `;
     return getScript(id);
@@ -267,6 +298,11 @@ function rowToScript(r: any): AdScript {
     video_error: r.video_error ?? null,
     keyframes: (r.keyframes as ScriptKeyframe[] | null) ?? null,
     keyframes_status: (r.keyframes_status as KeyframesStatus | null) ?? "idle",
+    persona: (r.persona as ScriptPersona | null) ?? null,
+    generation_prompt: r.generation_prompt ?? null,
+    generation_model: r.generation_model ?? null,
+    beats_prompt: r.beats_prompt ?? null,
+    beats_model: r.beats_model ?? null,
     created_at: Number(r.created_at),
   };
 }

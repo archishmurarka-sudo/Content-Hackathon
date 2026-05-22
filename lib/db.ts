@@ -140,6 +140,19 @@ export async function ensureSchema(): Promise<void> {
     // voiceover, visual, image_url, image_key, image_prompt, status, error }
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS keyframes JSONB;`;
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS keyframes_status TEXT;`;
+    // Locked protagonist for the keyframe storyboard — { age_range, gender,
+    // ethnicity, body_type, hair, wardrobe, vibe, setting, lighting, camera }
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS persona JSONB;`;
+    // Exact prompt sent to Gemini at generation time (includes the LIVE
+    // INTELLIGENCE FROM THE CONNOISSEUR CORPUS block when enrichment was on).
+    // Surfaced via "view prompt" on the Scripts page so the operator can
+    // verify what corpus data actually fed the request.
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS generation_prompt TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS generation_model TEXT;`;
+    // Beat-decomposition prompt (Gemini Flash call that returned the locked
+    // persona + 5 beats — distinct from the script-generation prompt above).
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS beats_prompt TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS beats_model TEXT;`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_product_idx ON ad_scripts (product_id, created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_batch_idx ON ad_scripts (batch_id);`;
 

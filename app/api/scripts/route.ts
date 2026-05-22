@@ -64,11 +64,17 @@ export async function POST(req: NextRequest) {
       notes,
       enrichment,
     });
-    if (generated.length === 0) {
+    if (generated.scripts.length === 0) {
       return NextResponse.json({ error: "Gemini returned no scripts" }, { status: 502 });
     }
     const batch_id = newBatchId();
-    const saved = await insertScripts({ product_id, batch_id, scripts: generated });
+    const saved = await insertScripts({
+      product_id,
+      batch_id,
+      scripts: generated.scripts,
+      generation_prompt: generated.prompt,
+      generation_model: generated.model,
+    });
 
     // Append-only log of what fed the batch — supports future model
     // fine-tuning and lets the operator audit the enrichment after the fact.

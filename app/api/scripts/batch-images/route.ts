@@ -10,6 +10,7 @@ import { isAuthed } from "@/lib/auth";
 import { listScriptsForProduct, setScriptImage } from "@/lib/ad-scripts";
 import { ensureProductsLoaded, findProduct } from "@/lib/data";
 import { generateAdImage, buildPromptForAdScript } from "@/lib/openai-images";
+import { fetchScriptEnrichment } from "@/lib/connoisseur_enrichment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +45,12 @@ export async function POST(req: NextRequest) {
   // Mark all as pending up front so the UI flips immediately.
   await Promise.all(scripts.map((s) => setScriptImage(s.id, { image_status: "pending", image_error: null })));
 
+  // Pull Connoisseur visual intel ONCE for the whole batch — every script
+  // here is for the same product, so the corpus payload is identical across
+  // them. fetchScriptEnrichment caches internally too, but the explicit hoist
+  // makes the lifecycle obvious.
+  const enrichment = await fetchScriptEnrichment(product).catch(() => undefined);
+
   let succeeded = 0;
   let failed = 0;
 
@@ -60,6 +67,7 @@ export async function POST(req: NextRequest) {
           product_one_liner: product.one_liner,
           placement: s.placement,
           hero_image_url: product.hero_image_url ?? null,
+          enrichment,
         });
         try {
           const img = await generateAdImage({

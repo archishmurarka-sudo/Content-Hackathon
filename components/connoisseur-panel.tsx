@@ -40,9 +40,10 @@ export type EnrichmentOverride = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  // Initial brand to seed the union with — when the brand list loads we
-  // expand to "all brands" so the operator's first action is to deselect.
-  initialBrandSlug?: string;
+  // Initial brand to seed the selection with. `null`/`undefined` means the
+  // current product has no Connoisseur corpus mapped to it — panel opens
+  // with zero brands selected and the operator must tick deliberately.
+  initialBrandSlug?: string | null;
   // Called whenever the operator changes brand set or ticks/unticks an item.
   // Parent stashes the latest value and passes it in the generate POST body.
   onChange: (override: EnrichmentOverride | null) => void;
@@ -58,7 +59,7 @@ const CATEGORY_KEY_OF: Record<CategoryKey, (x: any) => string> = {
   archetype_performance: (x) => x.archetype,
 };
 
-export function ConnoisseurPanel({ open, onClose, initialBrandSlug = "ashwamag", onChange }: Props) {
+export function ConnoisseurPanel({ open, onClose, initialBrandSlug, onChange }: Props) {
   const [brands, setBrands] = useState<Brand[]>([]);
   // Multi-select of brand slugs. Default is empty → seeded with all brand
   // slugs once the brand list lands so "all on" is the operator's starting
@@ -95,11 +96,12 @@ export function ConnoisseurPanel({ open, onClose, initialBrandSlug = "ashwamag",
   //    brand. Defaulting to "all 27 brands" was a UX trap — it ballooned the
   //    Gemini prompt and risked cross-contaminating an AshwaMag script with
   //    competitor selling-point language. Operator can still tick additional
-  //    brands deliberately for cross-brand inspiration.
+  //    brands deliberately for cross-brand inspiration. If the product has no
+  //    corpus mapped (initialBrandSlug is null), seed empty.
   useEffect(() => {
     if (!open || seededRef.current) return;
     seededRef.current = true;
-    setSelectedBrands(new Set([initialBrandSlug]));
+    setSelectedBrands(initialBrandSlug ? new Set([initialBrandSlug]) : new Set());
   }, [open, initialBrandSlug]);
 
   // 3) Whenever the selected-brand set changes, fetch any missing previews
@@ -231,7 +233,7 @@ export function ConnoisseurPanel({ open, onClose, initialBrandSlug = "ashwamag",
               🍄 Connoisseur priorities
             </div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-              Pick which brand corpora + items the prompt should emphasize. Default: every brand on.
+              Pick which brand corpora + items the prompt should emphasize. Default: the product's own brand only — tick peers for cross-brand inspiration.
               <span style={{ marginLeft: 8, color: "var(--accent)", fontWeight: 600 }}>
                 {totalPicked} / {totalAvailable} items
               </span>

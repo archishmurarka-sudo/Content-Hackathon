@@ -19,6 +19,7 @@ import { bump } from "./usage";
 import type { Product } from "./data";
 import type { ScriptEnrichment } from "./connoisseur_enrichment";
 import { renderEnrichmentForPrompt } from "./connoisseur_enrichment";
+import { extractPromoSignals, renderPromoBlockForCopy } from "./promo-signals";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -110,8 +111,17 @@ function buildPrompt(input: GenerateInput): string {
     );
   }
   if (input.notes && input.notes.trim()) {
-    optionalBlocks.push(`OPERATOR NOTES (priority — lean into these explicitly)\n${input.notes.trim()}`);
+    optionalBlocks.push(
+      `OPERATOR NOTES (load-bearing — every script must reflect these explicitly, not paraphrase them away)\n${input.notes.trim()}`
+    );
   }
+  // Pull any concrete promo signals (prices, percent-off, event names) out of
+  // the operator's notes and surface them as a dedicated PROMO HOOK block.
+  // This forces the hook or CTA to name them verbatim instead of the model
+  // drifting into generic "limited offer" language.
+  const promo = extractPromoSignals(input.notes);
+  const promoBlock = renderPromoBlockForCopy(promo);
+  if (promoBlock) optionalBlocks.push(promoBlock);
   if (input.enrichment) {
     optionalBlocks.push(renderEnrichmentForPrompt(input.enrichment));
   }
@@ -156,7 +166,7 @@ HARD RULES
 5. Execution Type must be exactly one of: "Creator-Led", "Stock+B-Roll Only", "Creator + B-Roll". Be honest — not every script needs a creator on camera.
 6. ${scriptNoun} MUST follow the STYLE structure above. If the script you draft drifts into a different format, rewrite it before returning.
 7. Pull at least one verbatim phrase from the CONSUMER VOICE block into at least one script.
-${input.count === 1 ? "" : `8. Variants must be distinct: different hooks, different angles, different CTAs. No two scripts can share the same opening line or pain entry point.\n`}
+${promo.has ? `8. PROMO is non-negotiable: every script's hook or CTA MUST name the price/event/discount supplied in PROMO HOOK above (verbatim — same dollar amount, same event name, same percent). Do not paraphrase ("amazing deal" instead of "$27") and do not skip it. This is the headline the operator typed; it leads the ad.\n` : ""}${input.count === 1 ? "" : `${promo.has ? "9" : "8"}. Variants must be distinct: different hooks, different angles, different CTAs. No two scripts can share the same opening line or pain entry point.\n`}
 OUTPUT FORMAT — strict JSON, no markdown fences, no commentary:
 {
   "scripts": [
@@ -262,7 +272,16 @@ The pivot must feel earned — not magic.`;
   }
 }
 
-export async function generateScripts(input: GenerateInput): Promise<GeneratedScript[]> {
+export type GenerationResult = {
+  scripts: GeneratedScript[];
+  // The exact prompt that was sent to Gemini — persisted alongside the row
+  // so the operator can verify what data + Connoisseur corpus blocks landed
+  // in the request (the "view prompt" toggle on the Scripts page).
+  prompt: string;
+  model: string;
+};
+
+export async function generateScripts(input: GenerateInput): Promise<GenerationResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
 
@@ -279,7 +298,13 @@ export async function generateScripts(input: GenerateInput): Promise<GeneratedSc
         generationConfig: {
           temperature: 0.95,
           responseMimeType: "application/json",
-          maxOutputTokens: 8192,
+          // 2.5 Pro reserves part of maxOutputTokens for hidden "thinking"
+          // tokens by default — with 8192 the JSON output got truncated and
+          // JSON.parse threw, surfacing as "Generation failed" toasts. We
+          // turn thinking off (this task is pure copywriting, not reasoning)
+          // AND raise the ceiling so we still have headroom for long batches.
+          maxOutputTokens: 32768,
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     }
@@ -292,19 +317,38 @@ export async function generateScripts(input: GenerateInput): Promise<GeneratedSc
   bump("storyboard"); // count scripts under the same usage bucket as scripts/storyboards
 
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Gemini returned empty content");
+  // 2.5 Pro can return multiple parts — text + optional thought parts. Filter
+  // out anything flagged `thought: true` and concatenate the rest so we don't
+  // accidentally try to JSON.parse the model's reasoning.
+  const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
+  const text = parts
+    .filter((p) => !p?.thought)
+    .map((p) => (typeof p?.text === "string" ? p.text : ""))
+    .filter(Boolean)
+    .join("");
+  if (!text) {
+    const finishReason = data?.candidates?.[0]?.finishReason ?? "(none)";
+    throw new Error(`Gemini returned empty content (finishReason=${finishReason}, parts=${parts.length})`);
+  }
 
   let parsed: any;
   try {
     parsed = JSON.parse(text);
-  } catch {
+  } catch (parseErr: any) {
     const cleaned = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
-    parsed = JSON.parse(cleaned);
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      // Surface the head of the offending text so the operator can see what
+      // the model returned instead of valid JSON.
+      throw new Error(
+        `Gemini JSON parse failed: ${parseErr?.message ?? parseErr}. First 400 chars: ${text.slice(0, 400)}`
+      );
+    }
   }
 
   const rows: any[] = Array.isArray(parsed?.scripts) ? parsed.scripts : [];
-  return rows.map((r) => {
+  const scripts = rows.map((r) => {
     // When the operator picked a concrete style, force script_kind to that
     // exact value. If Gemini drifted (e.g. wrote a testimonial when we asked
     // for problem_solution), the requested kind is the source of truth — we
@@ -323,6 +367,7 @@ export async function generateScripts(input: GenerateInput): Promise<GeneratedSc
       csv: normalizeCsvRow(r.csv ?? {}),
     };
   });
+  return { scripts, prompt, model };
 }
 
 function normalizeCsvRow(r: Record<string, any>): CsvRow {

@@ -210,6 +210,42 @@ export async function resolveEnrichmentFromBody(product: Product, body: any): Pr
   return await fetchScriptEnrichment(product).catch(() => undefined);
 }
 
+// Render the enrichment as a VISUAL block for image generation prompts.
+// Distinct from renderEnrichmentForPrompt (which is text-script-oriented and
+// dumps voice atoms / compliance rules) — gpt-image-2 cares about format,
+// archetype, and scene cues, not about banned phrases. We surface:
+//   - winner_combos with visual hints (narrative/format/hook decomposition)
+//   - top archetype_performance so the cast pick stays on-brand
+//   - voice_atoms re-purposed as emotional/scene mood anchors
+// Returns "" when there's nothing worth showing, so callers can skip the
+// block entirely instead of dumping empty whitespace into the prompt.
+export function renderVisualIntelligenceForImage(e: ScriptEnrichment | undefined | null): string {
+  if (!e) return "";
+  const parts: string[] = [];
+  if (e.winner_combos.length) {
+    parts.push(
+      `VISUAL FORMATS THAT WIN FOR THIS BRAND — bias composition, setting, hook beat toward these:\n` +
+        e.winner_combos.slice(0, 6).map((w) => `  - ${w.combo}${w.performance ? ` (${w.performance})` : ""}${w.evidence ? ` — ${w.evidence}` : ""}`).join("\n"),
+    );
+  }
+  if (e.archetype_performance.length) {
+    parts.push(
+      `CASTING ARCHETYPES VERIFIED FOR THIS BRAND — keep protagonist energy aligned with the top one:\n` +
+        e.archetype_performance.slice(0, 4).map((a) => `  - ${a.archetype}${a.performance ? ` (${a.performance})` : ""}`).join("\n"),
+    );
+  }
+  if (e.voice_atoms.length) {
+    // Take a small slice — voice atoms in image prompts are mood/scene cues,
+    // not lines to render verbatim (no on-screen text in keyframes).
+    parts.push(
+      `EMOTIONAL/SCENE ANCHORS (real consumer phrases — let them inform mood, body language, what's in frame, NOT on-screen text):\n` +
+        e.voice_atoms.slice(0, 5).map((v) => `  - "${v.phrase}"${v.category ? ` [${v.category}]` : ""}`).join("\n"),
+    );
+  }
+  if (parts.length === 0) return "";
+  return `LIVE INTELLIGENCE FROM THE CONNOISSEUR CORPUS (brand: ${e.brand_slug}) — use as VISUAL guidance, not as literal text to render in the image:\n\n${parts.join("\n\n")}`;
+}
+
 // Render the enrichment as a prompt block. Kept here (not in the prompt
 // builder) so the formatting stays consistent across scripts + briefs.
 export function renderEnrichmentForPrompt(e: ScriptEnrichment): string {
