@@ -25,6 +25,9 @@
   --accent-fg: #050308;
   --accent-soft: rgba(212, 255, 92, 0.16);
   --accent-glow: rgba(212, 255, 92, 0.4);
+  /* Legacy alias kept so components referencing var(--accent-bg) from the
+     old light theme don't fall back to pink. Same as --accent-soft. */
+  --accent-bg: rgba(212, 255, 92, 0.12);
 
   /* Secondary — psilocybin magenta. Used for "alive" / generative states */
   --magenta: #ff6dd0;

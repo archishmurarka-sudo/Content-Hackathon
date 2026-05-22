@@ -29,15 +29,16 @@ export function ConnoisseurToggle({ enabled, onChange, lastSummary, label }: Pro
         display: "inline-flex",
         alignItems: "center",
         gap: 10,
-        padding: "8px 12px",
-        background: enabled ? "var(--accent-bg, #f1eef8)" : "var(--surface-2, #f6f6f6)",
-        border: `1px solid ${enabled ? "var(--accent, #6c4cb5)" : "var(--border, #ddd)"}`,
-        borderRadius: 10,
+        padding: "8px 14px",
+        background: enabled ? "var(--accent-soft)" : "var(--surface-2)",
+        border: `1px solid ${enabled ? "var(--accent)" : "var(--border)"}`,
+        borderRadius: 999,
         fontSize: 12,
-        color: enabled ? "var(--accent, #6c4cb5)" : "var(--muted, #777)",
-        transition: "background 120ms, color 120ms, border-color 120ms",
+        color: enabled ? "var(--text)" : "var(--muted)",
+        transition: "background 120ms, color 120ms, border-color 120ms, box-shadow 200ms",
         cursor: "pointer",
         userSelect: "none",
+        boxShadow: enabled ? "0 0 12px var(--accent-glow)" : "none",
       }}
       onClick={() => onChange(!enabled)}
       role="switch"
@@ -51,7 +52,7 @@ export function ConnoisseurToggle({ enabled, onChange, lastSummary, label }: Pro
           width: 30,
           height: 16,
           borderRadius: 999,
-          background: enabled ? "var(--accent, #6c4cb5)" : "var(--border, #ccc)",
+          background: enabled ? "var(--accent)" : "var(--border-strong)",
           transition: "background 120ms",
           flexShrink: 0,
         }}
@@ -65,17 +66,17 @@ export function ConnoisseurToggle({ enabled, onChange, lastSummary, label }: Pro
             width: 12,
             height: 12,
             borderRadius: "50%",
-            background: "#fff",
-            transition: "left 120ms",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            background: enabled ? "var(--accent-fg)" : "var(--text-2)",
+            transition: "left 120ms, background 120ms",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.4)",
           }}
         />
       </div>
-      <span style={{ fontWeight: 600 }}>
+      <span style={{ fontWeight: 500, letterSpacing: 0.01 }}>
         🍄 {label ?? "Enrich by Connoisseur"}
       </span>
       {lastSummary && (
-        <span style={{ color: "var(--muted-2, #999)", fontWeight: 400, fontSize: 11 }}>
+        <span style={{ color: "var(--muted-2)", fontWeight: 400, fontSize: 11 }}>
           · {lastSummary}
         </span>
       )}
