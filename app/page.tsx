@@ -7,6 +7,7 @@ import { Sparkles, Send, TrendingUp, Image as ImageIcon, ArrowRight } from "luci
 import { useToast } from "@/components/toast";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 type Creator = {
   handle: string;
@@ -131,18 +132,13 @@ function Home() {
     setBriefs((await bRes.json()).briefs ?? []);
   }
 
+  // Initial fetch on mount; useVisibleInterval handles the recurring poll and
+  // pauses it whenever the tab is hidden / loses focus, fetching once on resume.
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 5000);
-    const onFocus = () => refresh();
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onFocus);
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useVisibleInterval(refresh, 5000);
 
   // Pre-fill the new-brief form when arriving from /?prefill=<handle>
   // (e.g. from the "Use" buttons on the creators table or per-creator pages).

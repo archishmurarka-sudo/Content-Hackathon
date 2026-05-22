@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/toast";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 type Shot = {
   idx: number;
@@ -139,11 +140,8 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     setBrief(await res.json());
   }
 
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 3000);
-    return () => clearInterval(t);
-  }, [id]);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+  useVisibleInterval(load, 3000);
 
   // Poll the pre-ship-check endpoint until a result lands (the storyboard
   // route schedules it fire-and-forget right after the storyboard saves).
@@ -967,7 +965,7 @@ function ShotCard({
               )}
             </div>
           ) : (
-            <div style={{ width: "100%", aspectRatio: "9/16", borderRadius: 8, background: "#1a1a22", display: "flex", alignItems: "center", justifyContent: "center", color: "#666", fontSize: 12, textAlign: "center", padding: 12 }}>
+            <div style={{ width: "100%", aspectRatio: "9/16", borderRadius: 8, background: "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 12, textAlign: "center", padding: 12 }}>
               {status === "pending" ? "Generating…" : status === "failed" ? "Failed" : "No frame yet"}
             </div>
           )}

@@ -1,18 +1,21 @@
 import { NextRequest } from "next/server";
 
-// Single fixed password for the team. Hardcoded on purpose so the wall
-// works regardless of what (if anything) Railway's DASHBOARD_PASSWORD
-// env var is set to — the env var is ignored.
-const PASSWORD = "Mosaic@2026";
+// Password sourced from DASHBOARD_PASSWORD env var. If unset locally, a
+// hardcoded dev fallback keeps the wall working — production must set
+// the env var explicitly. Trim to forgive stray whitespace from copy-paste.
+const FALLBACK_PASSWORD = "Mosaic@2026";
+function getPassword(): string {
+  return (process.env.DASHBOARD_PASSWORD ?? FALLBACK_PASSWORD).trim();
+}
 
 export function dashboardPassword(): string {
-  return PASSWORD;
+  return getPassword();
 }
 
 const COOKIE = "hf_dash_auth";
 
 export function isAuthed(req: NextRequest): boolean {
-  return req.cookies.get(COOKIE)?.value === PASSWORD;
+  return req.cookies.get(COOKIE)?.value === getPassword();
 }
 
 export function authCookieName() {

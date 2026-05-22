@@ -8,8 +8,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// POST /api/briefs/:id/frames  → generate (or re-generate) ALL frames for the brief.
-// Runs in parallel; each frame is saved/updated as it completes.
+// POST /api/briefs/:id/frames  → generate (or re-generate) frames for the brief.
+//
+// By default, SKIPS shots that already have status==="ready" — every frame
+// is a ~$0.04 OpenAI image gen, and the operator clicking "Regenerate all"
+// twice was paying for the entire storyboard twice. Pass `{ force: true }`
+// in the body (or ?force=1) to override and re-render every shot regardless.
+// Failed shots are always retried.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
@@ -17,9 +22,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!brief) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (!brief.storyboard) return NextResponse.json({ error: "storyboard not ready" }, { status: 400 });
 
+  const body = await req.json().catch(() => ({} as any));
+  const url = new URL(req.url);
+  const force = Boolean(body?.force) || url.searchParams.get("force") === "1";
+
   await initFrames(id);
   await ensureCreatorsLoaded();
   await ensureProductsLoaded();
+
+  // Re-fetch after initFrames so we have the canonical frame map.
+  const briefAfterInit = (await getBrief(id))!;
+  const existing = new Map((briefAfterInit.frames ?? []).map((f) => [f.shot_idx, f]));
 
   const creator = findCreator(brief.creator_handle);
   const product = findProduct(brief.product_id);
@@ -32,8 +45,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .slice(0, 3);
   const funnelStage = brief.funnel_stage ?? "BOF";
 
+  let skipped = 0;
+  let generated = 0;
+
   await Promise.all(
     brief.storyboard.shots.map(async (shot) => {
+      // Dedup: skip shots already in "ready" state unless caller forces.
+      // "pending"/"failed"/missing always (re)generate.
+      const current = existing.get(shot.idx);
+      if (!force && current?.status === "ready" && current.image_url) {
+        skipped++;
+        return;
+      }
       try {
         const img = await generateFrameImage({
           prompt: shot.image_prompt,
@@ -51,11 +74,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           shot_overlay: shot.overlay,
         });
         await setFrame(id, shot.idx, { status: "ready", image_url: img.url, image_key: img.key, error: undefined });
+        generated++;
       } catch (err: any) {
         await setFrame(id, shot.idx, { status: "failed", error: err?.message ?? "frame failed" });
       }
     })
   );
 
-  return NextResponse.json(await getBrief(id));
+  const result = await getBrief(id);
+  return NextResponse.json({ ...result, _meta: { generated, skipped, forced: force } });
 }

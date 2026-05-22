@@ -1,14 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { resolveTextModel, resolveImageModel } from "@/lib/models";
 import { hasDb, sql, ensureSchema } from "@/lib/db";
+import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Public health check. Never returns secret values — only booleans showing
-// which env vars are present so you can verify Railway config without
-// triggering a paid API call.
-export async function GET() {
+// Dual-mode health check:
+// - Unauthed callers (Railway uptime probe, external monitors): get { ok: true }.
+//   This is the smallest signal the platform needs to keep the service routed.
+// - Authed callers (the dashboard sidebar): get the full env/db/commit diagnostic
+//   that previously leaked to anonymous attackers as a reconnaissance surface.
+// Never returns secret VALUES — only presence booleans + the resolved model names.
+export async function GET(req: NextRequest) {
+  if (!isAuthed(req)) {
+    return NextResponse.json({ ok: true });
+  }
   let db_status: { configured: boolean; reachable: boolean; brief_count: number | null; error: string | null } = {
     configured: hasDb(),
     reachable: false,

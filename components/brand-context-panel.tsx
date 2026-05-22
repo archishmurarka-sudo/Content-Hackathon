@@ -20,8 +20,8 @@ export function BrandContextPanel({ ctx, loading }: { ctx: BrandContext | null; 
       className="card"
       style={{
         padding: 16,
-        border: available ? "1px solid var(--accent, #111)" : "1px dashed var(--border, #ddd)",
-        background: available ? "white" : "rgba(0,0,0,0.02)",
+        border: available ? "1px solid var(--accent)" : "1px dashed var(--border)",
+        background: available ? "var(--surface)" : "var(--surface-2)",
       }}
     >
       <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginBottom: 12, gap: 8 }}>
@@ -65,14 +65,15 @@ export function BrandContextPanel({ ctx, loading }: { ctx: BrandContext | null; 
                     style={{
                       padding: "4px 10px",
                       fontSize: 11,
-                      border: "1px solid var(--border, #ddd)",
+                      border: "1px solid var(--border)",
                       borderRadius: 999,
-                      background: "white",
+                      background: "var(--surface-2)",
+                      color: "var(--text-2)",
                     }}
                     title={sp.evidence ?? ""}
                   >
                     {sp.rank != null && (
-                      <span style={{ color: "var(--muted, #888)", marginRight: 4 }}>#{sp.rank}</span>
+                      <span style={{ color: "var(--muted)", marginRight: 4 }}>#{sp.rank}</span>
                     )}
                     {sp.label}
                   </span>
@@ -88,9 +89,9 @@ export function BrandContextPanel({ ctx, loading }: { ctx: BrandContext | null; 
                   <li key={i} style={{ fontSize: 12, lineHeight: 1.5 }}>
                     {c.archetype && <strong>{c.archetype}: </strong>}
                     {c.hook && <span>"{c.hook}" </span>}
-                    {c.visual && <span style={{ color: "var(--muted, #666)" }}>· {c.visual}</span>}
+                    {c.visual && <span style={{ color: "var(--muted)" }}>· {c.visual}</span>}
                     {c.win_rate != null && (
-                      <span style={{ color: "var(--accent, #1f6dd0)", marginLeft: 4 }}>
+                      <span style={{ color: "var(--accent)", marginLeft: 4 }}>
                         ({Math.round(c.win_rate * 100)}% win{c.sample_size ? ` · n=${c.sample_size}` : ""})
                       </span>
                     )}
@@ -106,9 +107,9 @@ export function BrandContextPanel({ ctx, loading }: { ctx: BrandContext | null; 
                 {ctx!.archetypePerf.slice(0, 6).map((a) => (
                   <div key={a.archetype} style={{
                     padding: 8,
-                    border: "1px solid var(--border, #eee)",
-                    borderRadius: 6,
-                    background: "rgba(0,0,0,0.02)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    background: "var(--surface-2)",
                   }}>
                     <div style={{ fontSize: 11, fontWeight: 600 }}>{a.archetype}</div>
                     {a.win_rate != null && (
@@ -136,10 +137,10 @@ export function BrandContextPanel({ ctx, loading }: { ctx: BrandContext | null; 
                     style={{
                       fontSize: 11,
                       padding: "4px 8px",
-                      borderRadius: 4,
-                      background: g.severity === "hard" ? "rgba(220,40,40,0.06)" : "rgba(0,0,0,0.03)",
-                      color: g.severity === "hard" ? "var(--danger, #c33)" : "var(--text, #333)",
-                      borderLeft: `3px solid ${g.severity === "hard" ? "var(--danger, #c33)" : "var(--border, #ccc)"}`,
+                      borderRadius: 6,
+                      background: g.severity === "hard" ? "var(--danger-soft)" : "var(--surface-2)",
+                      color: g.severity === "hard" ? "var(--danger)" : "var(--text-2)",
+                      borderLeft: `3px solid ${g.severity === "hard" ? "var(--danger)" : "var(--border-strong)"}`,
                     }}
                   >
                     {g.rule}
@@ -161,10 +162,10 @@ export function BrandContextPanel({ ctx, loading }: { ctx: BrandContext | null; 
                     style={{
                       margin: 0,
                       paddingLeft: 10,
-                      borderLeft: "2px solid var(--border, #ddd)",
+                      borderLeft: "2px solid var(--border-strong)",
                       fontSize: 12,
                       fontStyle: "italic",
-                      color: "var(--text, #333)",
+                      color: "var(--text-2)",
                     }}
                   >
                     "{v.text}"
@@ -180,7 +181,7 @@ export function BrandContextPanel({ ctx, loading }: { ctx: BrandContext | null; 
           )}
 
           {ctx!.portfolio && (
-            <div className="muted-sm" style={{ fontSize: 10, paddingTop: 6, borderTop: "1px dashed var(--border, #eee)" }}>
+            <div className="muted-sm" style={{ fontSize: 10, paddingTop: 6, borderTop: "1px dashed var(--border)" }}>
               {ctx!.portfolio.total_ads != null && `${ctx!.portfolio.total_ads.toLocaleString()} ads indexed`}
               {ctx!.portfolio.brands_tracked != null && ` · ${ctx!.portfolio.brands_tracked} brands`}
               {ctx!.portfolio.refreshed_at && ` · refreshed ${new Date(ctx!.portfolio.refreshed_at).toLocaleDateString()}`}

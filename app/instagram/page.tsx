@@ -10,6 +10,7 @@ import { BrandContextPanel } from "@/components/brand-context-panel";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
 import { readResearchPicks, clearResearchPicks } from "@/lib/research-picks";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 import type { BrandContext } from "@/lib/brand-context";
 
 type Product = { id: string; name: string; brand: string; one_liner?: string; hero_image_url?: string | null };
@@ -122,11 +123,8 @@ export default function InstagramPage() {
     setProducts(pData.products ?? []);
   }
 
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 5000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { refresh(); }, []);
+  useVisibleInterval(refresh, 5000);
 
   async function generate(e: React.FormEvent) {
     e.preventDefault();
@@ -338,11 +336,11 @@ export default function InstagramPage() {
                 marginTop: 14,
                 padding: "10px 12px",
                 borderRadius: 8,
-                background: "rgba(220, 60, 60, 0.06)",
-                border: "1px solid rgba(220, 60, 60, 0.4)",
+                background: "var(--danger-soft)",
+                border: "1px solid var(--danger)",
                 fontSize: 12,
                 lineHeight: 1.5,
-                color: "var(--text, #222)",
+                color: "var(--text)",
                 display: "flex",
                 alignItems: "flex-start",
                 gap: 10,
@@ -351,9 +349,9 @@ export default function InstagramPage() {
               <span style={{ fontSize: 14 }}>⚠️</span>
               <div style={{ flex: 1 }}>
                 <strong>{selectedProduct.name} has no product photo on file.</strong>
-                <div style={{ marginTop: 2, color: "var(--muted, #555)" }}>
+                <div style={{ marginTop: 2, color: "var(--muted)" }}>
                   Generation will fall back to text-only — the image will show an AI-invented bottle, not your actual product.{" "}
-                  <Link href={`/products/${selectedProduct.id}`} style={{ color: "var(--accent, #1f6dd0)", textDecoration: "underline" }}>
+                  <Link href={`/products/${selectedProduct.id}`} style={{ color: "var(--accent)", textDecoration: "underline" }}>
                     Upload a hero image on the product page →
                   </Link>
                 </div>
@@ -370,7 +368,7 @@ export default function InstagramPage() {
             />
           </div>
 
-          {error && <p style={{ color: "var(--danger, #d33)", marginTop: 12, fontSize: 13 }}>{error}</p>}
+          {error && <p style={{ color: "var(--danger)", marginTop: 12, fontSize: 13 }}>{error}</p>}
         </form>
       </div>
 
@@ -395,7 +393,7 @@ export default function InstagramPage() {
           {posts.map((post) => (
             <div key={post.id} className="card" style={{ padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{
-                background: "#000",
+                background: "var(--surface-3)",
                 borderRadius: 8,
                 overflow: "hidden",
                 aspectRatio: FORMAT_ASPECT[post.format] || "1 / 1",
@@ -408,11 +406,11 @@ export default function InstagramPage() {
                     style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                   />
                 ) : post.image_status === "pending" ? (
-                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#aaa", fontSize: 12 }}>
+                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 12 }}>
                     rendering…
                   </div>
                 ) : (
-                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#f88", fontSize: 12, padding: 12, textAlign: "center" }}>
+                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)", fontSize: 12, padding: 12, textAlign: "center" }}>
                     {post.error ?? "failed"}
                   </div>
                 )}
@@ -426,12 +424,12 @@ export default function InstagramPage() {
                 </span>
               </div>
               {post.caption && (
-                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "var(--text, #222)", whiteSpace: "pre-wrap" }}>
+                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.45, color: "var(--text)", whiteSpace: "pre-wrap" }}>
                   {post.caption}
                 </p>
               )}
               {post.hashtags.length > 0 && (
-                <p style={{ margin: 0, fontSize: 11, color: "var(--muted, #666)", lineHeight: 1.4 }}>
+                <p style={{ margin: 0, fontSize: 11, color: "var(--muted)", lineHeight: 1.4 }}>
                   {post.hashtags.map((h) => `#${h}`).join(" ")}
                 </p>
               )}
@@ -441,7 +439,7 @@ export default function InstagramPage() {
                   alignItems: "center",
                   gap: 4,
                   fontSize: 11,
-                  color: "var(--success, #2a8c5a)",
+                  color: "var(--ok)",
                   fontWeight: 600,
                 }}>
                   <CheckCircle2 size={12} /> Published · {new Date(post.published_at).toLocaleString()}
@@ -458,10 +456,11 @@ export default function InstagramPage() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 4,
-                    background: post.published_at ? "transparent" : "var(--accent, #111)",
-                    color: post.published_at ? "var(--muted, #555)" : "white",
-                    border: post.published_at ? "1px solid var(--border, #ddd)" : "1px solid var(--accent, #111)",
-                    borderRadius: 6,
+                    background: post.published_at ? "transparent" : "var(--accent)",
+                    color: post.published_at ? "var(--muted)" : "var(--accent-fg)",
+                    border: post.published_at ? "1px solid var(--border)" : "1px solid var(--accent)",
+                    borderRadius: 999,
+                    fontWeight: 600,
                     cursor: post.image_status === "ready" ? "pointer" : "not-allowed",
                   }}
                   title={post.image_status !== "ready" ? "Image must be ready before publishing" : post.published_at ? "Already published — click to re-stamp" : "Mark as published"}

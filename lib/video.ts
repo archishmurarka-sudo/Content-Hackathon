@@ -70,23 +70,38 @@ export async function getJobStatus(job: VideoJob): Promise<JobStatus> {
   return job.provider === "higgsfield" ? statusHiggsfield(job) : statusOpenRouter(job);
 }
 
+// Poll a video job to completion using exponential backoff.
+//
+// Veo / Higgsfield clips typically finish in ~30–90s. Hammering with a fixed
+// 5s interval = ~18 status calls per video, most of which return IN_PROGRESS.
+// We start at `intervalMs` (default 2.5s) and double up to `maxIntervalMs`
+// (default 10s) so a fast clip gets a quick first check while a slow one
+// stops hammering the API. `intervalMs` is treated as the floor — pass
+// 5000 to keep the old behavior.
 export async function pollUntilDone(
   job: VideoJob,
-  { timeoutMs, intervalMs }: { timeoutMs: number; intervalMs: number },
+  opts: { timeoutMs: number; intervalMs?: number; maxIntervalMs?: number },
 ): Promise<{ video_url: string; duration_s: number }> {
+  const { timeoutMs } = opts;
+  const minInterval = opts.intervalMs ?? 2500;
+  const maxInterval = opts.maxIntervalMs ?? 10000;
   const started = Date.now();
+  let wait = minInterval;
   while (Date.now() - started < timeoutMs) {
     const status = await getJobStatus(job);
     if (status.state === "COMPLETED") return { video_url: status.video_url, duration_s: status.duration_s };
     if (status.state === "FAILED") throw new Error(status.error);
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await new Promise((r) => setTimeout(r, wait));
+    wait = Math.min(maxInterval, Math.round(wait * 1.6));
   }
   throw new Error(`video job timed out after ${timeoutMs}ms`);
 }
 
 export async function renderShotVideoAndStore(opts: VideoGenContext): Promise<VideoResult> {
   const job = await startVideoJob(opts);
-  const result = await pollUntilDone(job, { timeoutMs: 8 * 60 * 1000, intervalMs: 5000 });
+  // Use new defaults: 2.5s floor → 10s cap with exponential backoff.
+  // Fast clips finish in 1–2 status calls; slow clips don't spam the provider.
+  const result = await pollUntilDone(job, { timeoutMs: 8 * 60 * 1000 });
   bump("video_render");
   const stored = await downloadAndStore(result.video_url, opts.brief_id, opts.shot_idx, job.provider);
   return { ...stored, duration_s: result.duration_s, model: job.model };

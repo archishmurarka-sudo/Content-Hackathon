@@ -53,40 +53,10 @@ export type ScriptEnrichment = {
   tool_status: Record<string, "ok" | "empty" | "error">;
 };
 
-// Map a product to its corpus slug. ONLY products that actually have a
-// corpus on the MCP get a slug — everything else returns null so the caller
-// can decide to skip enrichment (rather than silently borrowing AshwaMag's
-// sleep/cortisol voice atoms for, e.g., a hair product).
-//
-// Keyed by product.id first (most specific), then by brand/name fallback so
-// user-added products with the same identity still map correctly.
-const PRODUCT_ID_TO_BRAND_SLUG: Record<string, string> = {
-  // Built-in products from lib/data.ts
-  ashwamag: "ashwamag",          // Mag Ashwa Gummies — has corpus
-  // alpha (Alpha Shilajit) and hgr (HGR Hair) intentionally OMITTED — no
-  // corpus on the MCP, would only contaminate the prompt.
-};
-const NAME_HINT_TO_BRAND_SLUG: Record<string, string> = {
-  "ashwamag": "ashwamag",
-  "mag ashwa": "ashwamag",
-  "magashwa": "ashwamag",
-  "mag ashwa gummies": "ashwamag",
-};
-
-export function brandSlugForProduct(product: Pick<Product, "id" | "brand" | "name">): string | null {
-  if (product.id && PRODUCT_ID_TO_BRAND_SLUG[product.id]) return PRODUCT_ID_TO_BRAND_SLUG[product.id];
-  const candidates = [product.brand, product.name].filter(Boolean).map((s) => String(s).toLowerCase().trim());
-  for (const c of candidates) {
-    if (NAME_HINT_TO_BRAND_SLUG[c]) return NAME_HINT_TO_BRAND_SLUG[c];
-  }
-  return null;
-}
-
-// Convenience: true when the product has a Connoisseur corpus mapped to it.
-// Used by API routes to decide whether to attempt the MCP fetch at all.
-export function productHasCorpus(product: Pick<Product, "id" | "brand" | "name">): boolean {
-  return brandSlugForProduct(product) !== null;
-}
+// Pure product→slug mapping lives in ./brand-slug so client components can
+// import it without dragging in the MCP HTTP code that this file uses.
+export { brandSlugForProduct, productHasCorpus } from "./brand-slug";
+import { brandSlugForProduct } from "./brand-slug";
 
 // Run a single tool with both possible arg shapes, swallow errors, normalize
 // the return type. Connoisseur tools sometimes return a top-level array and
@@ -203,6 +173,15 @@ export async function fetchScriptEnrichment(product: Product, opts?: { limit?: n
     }),
     tool_status: status,
   };
+
+  // Only cache results where at least one tool returned data — caching a
+  // total-failure response would silently mask MCP outages for 5 minutes.
+  const anyOk = Object.values(status).some((s) => s === "ok");
+  if (anyOk) {
+    enrichmentCache.set(cacheKey, { value: result, expires_at: Date.now() + ENRICHMENT_TTL_MS });
+  }
+
+  return result;
 }
 
 // Decide what enrichment to use for a generation request body. Honors:

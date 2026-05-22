@@ -11,12 +11,16 @@ build/
 dist/
 *.tsbuildinfo
 
-# Env files (NEVER commit secrets)
+# Env files (NEVER commit secrets) — catch every .env* variant
 .env
+.env.*
 .env.local
 .env*.local
 .env.production
 .env.development.local
+.env.save
+.env.backup
+.env.bak
 
 # Logs
 npm-debug.log*

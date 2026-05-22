@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Mail, MessageCircle } from "lucide-react";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 type Delivery = {
   status: "queued" | "sent" | "failed";
@@ -34,11 +35,8 @@ export default function SendsPage() {
     setBriefs(d.briefs ?? []);
   }
 
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { load(); }, []);
+  useVisibleInterval(load, 5000);
 
   const sends = useMemo(
     () =>

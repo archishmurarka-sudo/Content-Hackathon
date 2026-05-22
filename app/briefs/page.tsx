@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 type BriefFrame = { shot_idx: number; status: string; image_url?: string };
 type Brief = {
@@ -25,11 +26,8 @@ export default function BriefsPage() {
     const d = await res.json();
     setBriefs(d.briefs ?? []);
   }
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { load(); }, []);
+  useVisibleInterval(load, 5000);
 
   const statuses = Array.from(new Set(briefs.map((b) => b.status))).sort();
   const filtered = statusFilter ? briefs.filter((b) => b.status === statusFilter) : briefs;

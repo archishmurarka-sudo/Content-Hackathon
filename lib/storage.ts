@@ -44,13 +44,23 @@ export function hasR2() {
 
 // ---------- write path ----------
 
+// Write a binary asset. The key uses the first 16 hex chars of the body's
+// SHA-256 — content-addressed so identical bytes produce the same key and
+// R2 overwrites in place instead of orphaning copies. (R2 doesn't dedup at
+// the bucket level on its own; this gives us dedup for free without an
+// extra HEAD request.) Caller can pass `bypassContentHash: true` if they
+// explicitly want a fresh random ID (e.g. for an A/B comparison where two
+// identical bytes need distinct URLs — unusual).
 export async function putAsset(opts: {
   prefix: string;
   ext: string;
   body: Buffer;
   contentType: string;
+  bypassContentHash?: boolean;
 }): Promise<PutResult> {
-  const id = crypto.randomBytes(8).toString("hex");
+  const id = opts.bypassContentHash
+    ? crypto.randomBytes(8).toString("hex")
+    : crypto.createHash("sha256").update(opts.body).digest("hex").slice(0, 16);
   const key = `${opts.prefix}/${id}.${opts.ext}`;
   if (hasR2()) await putR2(key, opts.body, opts.contentType);
   else putLocal(key, opts.body);
