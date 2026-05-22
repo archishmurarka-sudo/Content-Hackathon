@@ -179,8 +179,15 @@ function Home() {
             <span style={{ color: "var(--muted)" }}>pegged to your top creators.</span>
           </h1>
         </div>
-        <div className="muted-sm" style={{ textAlign: "right", maxWidth: 280 }}>
-          157 BOF prototypes indexed · 47 creators with full dossiers · 911 source videos analyzed.
+        <div style={{ textAlign: "right", maxWidth: 280 }}>
+          <div className="muted-sm">
+            157 BOF prototypes indexed · 47 creators with full dossiers · 911 source videos analyzed.
+          </div>
+          <div style={{ marginTop: 10, display: "flex", gap: 12, justifyContent: "flex-end", fontSize: 12 }}>
+            <Link href="/instagram" style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--accent, inherit)" }}>
+              Instagram branded content <ArrowRight size={12} />
+            </Link>
+          </div>
         </div>
       </div>
 
