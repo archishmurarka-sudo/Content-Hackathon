@@ -246,8 +246,9 @@ function Home() {
                   fontSize: 12,
                   border: funnelStage === stage ? "1px solid var(--accent)" : "1px solid var(--border)",
                   background: funnelStage === stage ? "var(--accent)" : "transparent",
-                  color: funnelStage === stage ? "white" : "var(--muted)",
-                  borderRadius: 6,
+                  color: funnelStage === stage ? "var(--accent-fg)" : "var(--text-2)",
+                  borderRadius: 999,
+                  fontWeight: funnelStage === stage ? 600 : 500,
                 }}
               >
                 {stage === "BOF" ? "Bottom · hard sell" : stage === "MOF" ? "Middle · consideration" : "Top · awareness"}

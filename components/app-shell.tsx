@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </svg>
           </span>
           <span style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-            <span className="sidebar-brand-name">Shroom</span>
+            <span className="sidebar-brand-name">Shrooms</span>
             <span className="sidebar-brand-tag">creative engine</span>
           </span>
         </Link>

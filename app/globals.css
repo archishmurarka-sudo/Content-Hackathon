@@ -1,49 +1,72 @@
 /*
-  Mosaic Creator Engine — design tokens.
-  Botanical-dark theme. Inspired by Root Labs palette + content-tool dashboards
-  (Linear, Frame.io, OpusClip).
+  Shrooms — Creative Engine design tokens.
+  Mycelium-dark theme. Bioluminescent chartreuse + psilocybin magenta.
+  Class names preserved (.card, .btn, .badge, .sidebar-*, .topbar-*)
+  so every existing page picks up the new look without touching its logic.
 */
 
 :root {
-  --bg: #0b0d0c;
-  --surface: #13171a;
-  --surface-2: #1b2024;
-  --surface-3: #232a30;
-  --border: #252b30;
-  --border-strong: #353d45;
+  /* Surfaces — lifted mycelium-charcoal. Not pure black; reads as deep neutral with a violet undertone. */
+  --bg: #14111d;
+  --surface: #1d1a28;
+  --surface-2: #272335;
+  --surface-3: #322d44;
+  --border: #322c46;
+  --border-strong: #483f5f;
 
-  --text: #ecefee;
-  --text-2: #c3c9c6;
-  --muted: #8a948f;
-  --muted-2: #6a7370;
+  /* Text — high-contrast cream. muted values lifted further for clear hierarchy on dark surfaces. */
+  --text: #faf6fb;
+  --text-2: #ebe4f2;
+  --muted: #c4bbd4;
+  --muted-2: #9b91ad;
 
-  --accent: #7cb47c;       /* Root Labs sage */
-  --accent-fg: #0b0d0c;
-  --accent-soft: rgba(124, 180, 124, 0.14);
+  /* Primary accent — slightly softer chartreuse for less neon-eye-strain */
+  --accent: #d4ff5c;
+  --accent-fg: #050308;
+  --accent-soft: rgba(212, 255, 92, 0.16);
+  --accent-glow: rgba(212, 255, 92, 0.4);
 
-  --gold: #d4a85a;         /* CTA / urgency */
-  --gold-soft: rgba(212, 168, 90, 0.14);
+  /* Secondary — psilocybin magenta. Used for "alive" / generative states */
+  --magenta: #ff6dd0;
+  --magenta-soft: rgba(255, 109, 208, 0.18);
+  --magenta-glow: rgba(255, 109, 208, 0.4);
 
-  --danger: #e87466;
-  --danger-soft: rgba(232, 116, 102, 0.14);
-  --warn: #d4a85a;
-  --ok: #7cb47c;
-  --info: #7aa8d6;
+  /* Tertiary — fungal amber */
+  --gold: #ffc26a;
+  --gold-soft: rgba(255, 194, 106, 0.16);
 
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
+  /* Status */
+  --danger: #ff7585;
+  --danger-soft: rgba(255, 117, 133, 0.16);
+  --warn: #ffc26a;
+  --ok: #d4ff5c;
+  --info: #8fd2ff;
+  --info-soft: rgba(143, 210, 255, 0.16);
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
   --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
-  --shadow: 0 4px 16px rgba(0,0,0,.45);
+  /* Shadows + glow */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+  --shadow: 0 8px 32px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,0.02);
+  --shadow-glow: 0 0 24px var(--accent-glow);
+  --shadow-glow-magenta: 0 0 24px var(--magenta-glow);
 
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Type — Geist for UI (Vercel's typeface; has character without going generic),
+     Instrument Serif for editorial display (used in Frame.io / Descript / Captions branding). */
+  --font-sans: var(--font-sans-base), -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-serif: var(--font-serif-base), "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-mono-base), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --sidebar-w: 232px;
-  --topbar-h: 56px;
+  --sidebar-w: 240px;
+  --topbar-h: 60px;
+
+  /* Brand gradient — chartreuse → mint → magenta */
+  --grad-brand: linear-gradient(135deg, #d4ff5c 0%, #82ffc5 40%, #ff6dd0 100%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(212,255,92,0.2), rgba(255,109,208,0.2));
 }
 
 * { box-sizing: border-box; }
@@ -54,32 +77,65 @@ html, body {
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 14px;
-  line-height: 1.5;
+  font-weight: 420;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* Ambient mycelium mesh — pulled wider and softer so the page reads lifted, not dark. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(80vw 70vh at 0% -10%, rgba(212,255,92,0.05), transparent 60%),
+    radial-gradient(70vw 60vh at 110% 110%, rgba(255,109,208,0.06), transparent 55%),
+    radial-gradient(50vw 50vh at 50% 50%, rgba(143,210,255,0.025), transparent 70%);
+}
+body > * { position: relative; z-index: 1; }
+
 ::selection { background: var(--accent); color: var(--accent-fg); }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* Typography */
-h1, h2, h3 {
+/* Typography — leaning into lighter weights for editorial elegance. Instrument Serif is single-weight 400. */
+h1, h2 {
   font-family: var(--font-serif);
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-weight: 400;
+  letter-spacing: -0.025em;
   margin: 0;
   color: var(--text);
 }
-h1 { font-size: 36px; line-height: 1.1; }
-h2 { font-size: 22px; line-height: 1.2; }
-h3 { font-size: 16px; line-height: 1.3; }
+h1 { font-size: 52px; line-height: 1.0; }
+h2 { font-size: 32px; line-height: 1.15; }
+/* h3 stays sans (Geist) — lighter weight for a calmer hierarchy */
+h3 {
+  font-family: var(--font-sans);
+  font-weight: 450;
+  letter-spacing: -0.012em;
+  font-size: 16px;
+  line-height: 1.35;
+  margin: 0;
+  color: var(--text);
+}
 
 .eyebrow {
   font-family: var(--font-sans);
   font-size: 11px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
+}
+
+/* Optional italic display accent — use sparingly on key phrases */
+.serif-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
 }
 
 /* Form controls */
@@ -89,13 +145,17 @@ input, textarea, select {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 9px 12px;
+  padding: 10px 13px;
   outline: none;
-  transition: border-color 120ms;
+  transition: border-color 120ms, box-shadow 120ms;
 }
-input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 
-/* Buttons */
+/* Buttons — filled buttons keep enough weight to read on bright accent backgrounds.
+   Ghost / outline buttons go lighter (defined separately below). */
 button, .btn {
   font: inherit;
   cursor: pointer;
@@ -103,30 +163,32 @@ button, .btn {
   color: var(--accent-fg);
   border: 1px solid var(--accent);
   border-radius: var(--radius);
-  padding: 9px 14px;
+  padding: 9px 15px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: filter 120ms, background 120ms;
+  transition: filter 120ms, background 120ms, box-shadow 200ms, transform 100ms;
 }
-button:hover { filter: brightness(1.08); }
-button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+button:hover { filter: brightness(1.06); box-shadow: var(--shadow-glow); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.4; cursor: not-allowed; filter: none; box-shadow: none; }
 
 .btn-ghost {
   background: transparent;
   color: var(--text);
   border-color: var(--border-strong);
+  font-weight: 450;
 }
-.btn-ghost:hover { background: var(--surface-2); }
+.btn-ghost:hover { background: var(--surface-2); box-shadow: none; }
 
 .btn-danger {
   background: transparent;
   color: var(--danger);
   border-color: var(--danger);
 }
-.btn-danger:hover { background: var(--danger-soft); }
+.btn-danger:hover { background: var(--danger-soft); box-shadow: 0 0 16px rgba(255,93,112,0.3); }
 
 .btn-gold {
   background: var(--gold);
@@ -134,10 +196,17 @@ button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
   color: var(--accent-fg);
 }
 
+.btn-magenta {
+  background: var(--magenta);
+  border-color: var(--magenta);
+  color: #1a0a14;
+}
+.btn-magenta:hover { box-shadow: var(--shadow-glow-magenta); }
+
 .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm); }
 
 /* Layout primitives */
-.container { max-width: 1240px; margin: 0 auto; padding: 32px 28px; }
+.container { max-width: 1280px; margin: 0 auto; padding: 36px 28px; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
 .col { display: flex; flex-direction: column; gap: 12px; }
 
@@ -145,27 +214,46 @@ button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
 }
-.card-hover { transition: border-color 140ms, background 140ms; }
-.card-hover:hover { border-color: var(--border-strong); background: var(--surface-2); }
+/* Thin spore-glow line at the top of cards — subtle but signature */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--grad-brand);
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.card-hover { transition: border-color 180ms, background 180ms, transform 180ms; }
+.card-hover:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+.card-hover:hover::before { opacity: 0.7; }
 
 .grid {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
-/* Status pills */
+/* Status pills — keep all existing class names, push the glow */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: lowercase;
   border: 1px solid transparent;
 }
@@ -181,69 +269,103 @@ button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 .badge-frames_pending,
 .badge-videos_pending,
 .badge-pending,
-.badge-processing { background: var(--gold-soft); color: var(--gold); border-color: rgba(212,168,90,.3); }
+.badge-processing {
+  background: var(--magenta-soft);
+  color: var(--magenta);
+  border-color: rgba(255,78,200,0.3);
+}
+.badge-generating_storyboard::before,
+.badge-frames_pending::before,
+.badge-videos_pending::before,
+.badge-pending::before,
+.badge-processing::before {
+  box-shadow: 0 0 8px var(--magenta);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
 
 .badge-storyboard_ready,
 .badge-frames_ready,
 .badge-videos_ready,
 .badge-ready,
-.badge-succeeded { background: var(--accent-soft); color: var(--accent); border-color: rgba(124,180,124,.3); }
+.badge-succeeded {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(198,255,61,0.3);
+}
 
 .badge-frames_approved,
-.badge-approved { background: var(--accent-soft); color: var(--accent); border-color: rgba(124,180,124,.4); }
-.badge-frames_approved::before, .badge-approved::before { box-shadow: 0 0 8px var(--accent); }
+.badge-approved {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(198,255,61,0.5);
+}
+.badge-frames_approved::before, .badge-approved::before { box-shadow: 0 0 10px var(--accent); }
 
-.badge-delivered { background: rgba(122,168,214,.14); color: var(--info); border-color: rgba(122,168,214,.3); }
-.badge-failed { background: var(--danger-soft); color: var(--danger); border-color: rgba(232,116,102,.3); }
+.badge-delivered { background: var(--info-soft); color: var(--info); border-color: rgba(126,200,255,0.3); }
+.badge-failed { background: var(--danger-soft); color: var(--danger); border-color: rgba(255,93,112,0.3); }
 
-.muted { color: var(--muted); font-size: 13px; }
-.muted-sm { color: var(--muted-2); font-size: 12px; }
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.muted { color: var(--muted); font-size: 13px; font-weight: 450; }
+.muted-sm { color: var(--muted); font-size: 12px; font-weight: 450; }
 .mono { font-family: var(--font-mono); }
 
-/* Stats */
+/* Stats — solid cream by default (much more readable); apply .stat-value-grad for the hero metric only. */
 .stat-value {
   font-family: var(--font-serif);
-  font-size: 34px;
-  line-height: 1.05;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-size: 44px;
+  line-height: 1.0;
+  font-weight: 400;
+  letter-spacing: -0.035em;
   color: var(--text);
+}
+.stat-value-grad {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .stat-label {
   font-size: 11px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
+  font-family: var(--font-sans);
 }
 
 /* Thumbnails */
 .thumb {
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: #000;
   overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border);
 }
 .thumb-916 {
   aspect-ratio: 9/16;
   width: 100%;
   object-fit: cover;
 }
-.thumb-strip { display: flex; gap: 4px; margin-top: 10px; }
-.thumb-strip img { width: 38px; height: 67px; object-fit: cover; border-radius: 4px; background: #000; }
+.thumb-strip { display: flex; gap: 5px; margin-top: 12px; }
+.thumb-strip img { width: 40px; height: 71px; object-fit: cover; border-radius: 5px; background: #000; }
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-table th, table td { padding: 12px 16px; text-align: left; }
+table th, table td { padding: 13px 16px; text-align: left; }
 table th {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--muted);
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
-table tr { border-bottom: 1px solid var(--border); }
+table tr { border-bottom: 1px solid var(--border); transition: background 100ms; }
+table tr:hover { background: var(--surface-2); }
 table tr:last-child { border-bottom: 0; }
 
 /* App shell — sidebar layout */
@@ -253,9 +375,9 @@ table tr:last-child { border-bottom: 0; }
   grid-template-columns: var(--sidebar-w) 1fr;
 }
 .sidebar {
-  background: #0a0c0b;
+  background: linear-gradient(180deg, #1a1726 0%, #14111d 100%);
   border-right: 1px solid var(--border);
-  padding: 18px 14px;
+  padding: 20px 14px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -266,49 +388,76 @@ table tr:last-child { border-bottom: 0; }
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px 18px;
+  gap: 11px;
+  padding: 4px 8px 22px;
 }
 .sidebar-brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent) 0%, #4f8a4f 100%);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--grad-brand);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 16px;
   color: var(--accent-fg);
+  box-shadow: 0 0 18px rgba(212,255,92,0.35), inset 0 1px 0 rgba(255,255,255,0.3);
+  flex-shrink: 0;
 }
+/* Solid text on the wordmark — gradient-on-small-type was unreadable.
+   The glyph chip carries the brand color story; the name stays high-contrast. */
 .sidebar-brand-name {
   font-family: var(--font-serif);
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.sidebar-brand-tag {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+  margin-top: 3px;
 }
 .sidebar-section {
   font-size: 10px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--muted-2);
-  font-weight: 600;
-  padding: 14px 10px 6px;
+  font-weight: 700;
+  padding: 16px 10px 6px;
 }
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 11px;
+  padding: 8px 11px;
   border-radius: var(--radius-sm);
   color: var(--text-2);
   font-size: 13px;
   font-weight: 500;
-  transition: background 100ms, color 100ms;
+  transition: background 120ms, color 120ms;
+  position: relative;
 }
 .sidebar-link:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
-.sidebar-link.active { background: var(--surface-2); color: var(--text); }
+.sidebar-link.active {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+.sidebar-link.active::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
 .sidebar-link.active .sidebar-link-icon { color: var(--accent); }
 .sidebar-link-icon { color: var(--muted); flex-shrink: 0; }
 
@@ -318,14 +467,15 @@ table tr:last-child { border-bottom: 0; }
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 0 28px;
+  padding: 0 32px;
   position: sticky;
   top: 0;
-  background: rgba(11, 13, 12, 0.85);
-  backdrop-filter: blur(8px);
+  background: rgba(20, 17, 29, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   z-index: 10;
 }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .topbar-chip {
   display: inline-flex;
   align-items: center;
@@ -335,38 +485,52 @@ table tr:last-child { border-bottom: 0; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  padding: 4px 10px;
+  padding: 5px 12px;
   font-family: var(--font-mono);
 }
-.topbar-chip strong { color: var(--text); font-family: var(--font-sans); font-weight: 600; }
+.topbar-chip strong { color: var(--text); font-family: var(--font-sans); font-weight: 700; }
 
 .app-main { min-width: 0; }
 
-/* Pipeline progress bar */
+/* Pipeline progress bar — amp the active state */
 .pipeline {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-  margin-top: 14px;
+  gap: 5px;
+  margin-top: 16px;
 }
 .pipeline-step {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 9px 10px;
+  padding: 10px 11px;
   font-size: 11px;
   color: var(--muted);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  position: relative;
+  overflow: hidden;
 }
-.pipeline-step.done { background: var(--accent-soft); color: var(--accent); border-color: rgba(124,180,124,.35); }
-.pipeline-step.active { background: var(--gold-soft); color: var(--gold); border-color: rgba(212,168,90,.4); animation: pulse 1.6s ease-in-out infinite; }
-.pipeline-step strong { font-size: 13px; color: inherit; font-family: var(--font-sans); font-weight: 600; }
-@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(212,168,90,.35); } 50% { box-shadow: 0 0 0 6px rgba(212,168,90,0); } }
+.pipeline-step.done {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(198,255,61,0.35);
+}
+.pipeline-step.active {
+  background: var(--magenta-soft);
+  color: var(--magenta);
+  border-color: rgba(255,78,200,0.5);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.pipeline-step strong { font-size: 13px; color: inherit; font-family: var(--font-sans); font-weight: 700; }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,78,200,.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255,78,200,0); }
+}
 
 /* Misc */
-hr { border: 0; border-top: 1px solid var(--border); margin: 24px 0; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 26px 0; }
 video { width: 100%; border-radius: var(--radius); background: #000; }
 details summary { user-select: none; cursor: pointer; }
 .skeleton {
@@ -376,3 +540,17 @@ details summary { user-select: none; cursor: pointer; }
   border-radius: var(--radius-sm);
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Spore-text — utility for gradient headlines */
+.spore-text {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Scrollbar — subtle, themed */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 5px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 // lucide-react doesn't export an `Instagram` glyph in this version; Camera
 // is the closest neutral substitute that fits the social-photo metaphor.
-import { Camera as Instagram, Sparkles, Trash2, Copy } from "lucide-react";
+import { Camera as Instagram, Sparkles, Trash2, Copy, Upload, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { BrandContextPanel } from "@/components/brand-context-panel";
 import type { BrandContext } from "@/lib/brand-context";
@@ -16,15 +16,18 @@ type IgPost = {
   product_id: string;
   format: IgFormat;
   theme: string;
+  audience: string | null;
   vibe: string | null;
   image_status: "pending" | "ready" | "failed";
   image_url: string | null;
   image_prompt: string | null;
   caption: string | null;
   hashtags: string[];
+  published_at: number | null;
   error: string | null;
   created_at: number;
 };
+type Audience = { value: string; label: string; pain?: string };
 
 const FORMAT_LABEL: Record<IgFormat, string> = {
   feed_1x1: "Feed · 1:1",
@@ -61,9 +64,12 @@ export default function InstagramPage() {
   const [productId, setProductId] = useState("ashwamag");
   const [format, setFormat] = useState<IgFormat>("feed_1x1");
   const [theme, setTheme] = useState("lifestyle");
+  const [audience, setAudience] = useState<string>("general");
   const [vibe, setVibe] = useState("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audiences, setAudiences] = useState<Audience[]>([]);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   // Brand-context slot — fed by /api/brand-context which the other chat
   // is wiring to the Connoisseur MCP. Until that lands the endpoint
@@ -92,6 +98,7 @@ export default function InstagramPage() {
     setPosts(igData.posts ?? []);
     setFormats(igData.formats ?? []);
     setThemes(igData.themes ?? []);
+    setAudiences(igData.audiences ?? []);
     setProducts(pData.products ?? []);
   }
 
@@ -108,7 +115,7 @@ export default function InstagramPage() {
     const res = await fetch("/api/instagram", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: productId, format, theme, vibe, use_brand_context: useBrandIntel }),
+      body: JSON.stringify({ product_id: productId, format, theme, audience, vibe, use_brand_context: useBrandIntel }),
     });
     setGenerating(false);
     const data = await res.json().catch(() => ({}));
@@ -129,6 +136,22 @@ export default function InstagramPage() {
     if (!confirm("Delete this post?")) return;
     const res = await fetch(`/api/instagram/${id}`, { method: "DELETE" });
     if (res.ok) refresh();
+  }
+
+  async function publishPost(post: IgPost) {
+    if (post.published_at) {
+      if (!confirm("This post is already marked as published. Mark it again with a fresh timestamp?")) return;
+    }
+    setPublishingId(post.id);
+    const res = await fetch(`/api/instagram/${post.id}/publish`, { method: "POST" });
+    setPublishingId(null);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error("Publish failed", data?.error);
+      return;
+    }
+    toast.success("Marked as published", "WhatsApp + post log will show it.");
+    refresh();
   }
 
   function copyCaption(post: IgPost) {
@@ -196,11 +219,12 @@ export default function InstagramPage() {
                 style={{
                   padding: "6px 12px",
                   fontSize: 12,
-                  border: format === f.value ? "1px solid var(--accent, #111)" : "1px solid var(--border, #ddd)",
-                  background: format === f.value ? "var(--accent, #111)" : "transparent",
-                  color: format === f.value ? "white" : "var(--muted, #666)",
-                  borderRadius: 6,
+                  border: format === f.value ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: format === f.value ? "var(--accent)" : "transparent",
+                  color: format === f.value ? "var(--accent-fg)" : "var(--text-2)",
+                  borderRadius: 999,
                   cursor: "pointer",
+                  fontWeight: format === f.value ? 600 : 500,
                 }}
               >
                 {f.label}
