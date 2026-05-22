@@ -126,6 +126,49 @@ function estimateCost(quality: "low" | "medium" | "high", _size: ImageSize): num
   return { low: 0.011, medium: 0.042, high: 0.167 }[quality];
 }
 
+// Builds an image prompt for a single keyframe of a Meta-script storyboard.
+// Used by the 5-keyframe-per-script generator so each frame is concrete and
+// distinct (instead of every script sharing one generic "lead image").
+export function buildPromptForKeyframe(args: {
+  beat: { idx: number; timestamp_s: number; voiceover: string; visual: string };
+  total_beats: number;
+  total_duration_s: number;
+  product_name: string;
+  product_brand: string;
+  product_format?: string | null;
+  product_one_liner?: string;
+  placement?: string | null;
+}): string {
+  const placement = (args.placement ?? "mixed").toLowerCase();
+  const isPortrait = placement !== "feed";
+
+  const aestheticBlock = isPortrait
+    ? "Aesthetic: vertical 9:16 Meta Reels / Stories keyframe. UGC-style, handheld, natural daylight or warm interior. Subject and product clearly visible. Not a polished studio ad."
+    : "Aesthetic: clean, mobile-first Meta Feed keyframe. Square 1:1 composition, high contrast, sound-off-friendly. Real-feeling, not stock.";
+
+  const lines = [
+    aestheticBlock,
+    "",
+    `PRODUCT: ${args.product_name} by ${args.product_brand}${args.product_format ? ` (${args.product_format})` : ""}.`,
+    args.product_one_liner ? `WHAT IT IS: ${args.product_one_liner}` : "",
+    "",
+    `KEYFRAME ${args.beat.idx + 1} of ${args.total_beats} — moment ${args.beat.timestamp_s}s of ${args.total_duration_s}s`,
+    args.beat.voiceover ? `LINE BEING SPOKEN: "${args.beat.voiceover}"` : "(silent / ambient beat)",
+    "",
+    "SCENE",
+    args.beat.visual,
+    "",
+    "STRICT RULES",
+    "- DO NOT render any text, captions, overlays, watermarks, app UI, or brand logos other than the actual product label.",
+    "- DO NOT use AI-art, illustration, anime, or 3D render styles — this must look like a real phone photo or studio still.",
+    "- Maintain the SAME subject, SAME setting, SAME lighting palette across keyframes — this is one continuous ad. Only the action and framing change beat to beat.",
+    "- Product must be recognizable in frame. The label must be readable enough to identify the brand.",
+    "- Composition: eye-level, mobile-first framing.",
+  ];
+
+  return lines.filter(Boolean).join("\n");
+}
+
 // Builds the image prompt for a Meta direct-response script row. Combines the
 // script's "Building Block" (hook) + "Script/Voiceover" + "Visual Ref" with
 // the product context so the output looks like an actual ad asset, not a

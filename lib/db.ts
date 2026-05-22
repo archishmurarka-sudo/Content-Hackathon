@@ -135,6 +135,11 @@ export async function ensureSchema(): Promise<void> {
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_prompt TEXT;`;
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_model TEXT;`;
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_error TEXT;`;
+    // Keyframes — 5-image storyboard per script for visual-consistency QA
+    // before committing to the Veo render. Shape: { idx, timestamp_s,
+    // voiceover, visual, image_url, image_key, image_prompt, status, error }
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS keyframes JSONB;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS keyframes_status TEXT;`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_product_idx ON ad_scripts (product_id, created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_batch_idx ON ad_scripts (batch_id);`;
 

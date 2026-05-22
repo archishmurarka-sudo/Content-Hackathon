@@ -6,6 +6,19 @@ import type { GeneratedScript, CsvRow } from "./script-generator";
 
 export type ImageStatus = "idle" | "pending" | "ready" | "failed";
 export type VideoStatus = "idle" | "pending" | "ready" | "failed";
+export type KeyframesStatus = "idle" | "pending" | "ready" | "partial" | "failed";
+
+export type ScriptKeyframe = {
+  idx: number;
+  timestamp_s: number;
+  voiceover: string;
+  visual: string;
+  image_url: string | null;
+  image_key: string | null;
+  image_prompt: string | null;
+  status: ImageStatus;
+  error: string | null;
+};
 
 export type AdScript = {
   id: string;
@@ -30,6 +43,11 @@ export type AdScript = {
   video_prompt?: string | null;
   video_model?: string | null;
   video_error?: string | null;
+  // 5-keyframe storyboard for visual-consistency QA. When ready, the first
+  // keyframe's image_url is also mirrored onto image_url at the row level
+  // so it feeds the Veo first-frame.
+  keyframes?: ScriptKeyframe[] | null;
+  keyframes_status?: KeyframesStatus;
   created_at: number;
 };
 
@@ -157,6 +175,41 @@ export async function setScriptImage(
   return cur;
 }
 
+export async function setScriptKeyframes(
+  id: string,
+  patch: {
+    keyframes?: ScriptKeyframe[] | null;
+    keyframes_status?: KeyframesStatus;
+    // When the first keyframe is ready, mirror its URL onto image_url so
+    // the existing Veo first-frame path picks it up without changes.
+    image_url?: string | null;
+    image_key?: string | null;
+    image_status?: ImageStatus;
+    image_prompt?: string | null;
+  }
+): Promise<AdScript | undefined> {
+  if (hasDb()) {
+    await ensureSchema();
+    const s = sql();
+    await s`
+      UPDATE ad_scripts SET
+        keyframes        = ${patch.keyframes === undefined ? null : (patch.keyframes === null ? null : s.json(patch.keyframes as any))},
+        keyframes_status = COALESCE(${patch.keyframes_status ?? null}, keyframes_status),
+        image_url        = COALESCE(${patch.image_url ?? null}, image_url),
+        image_key        = COALESCE(${patch.image_key ?? null}, image_key),
+        image_status     = COALESCE(${patch.image_status ?? null}, image_status),
+        image_prompt     = COALESCE(${patch.image_prompt ?? null}, image_prompt)
+      WHERE id = ${id}
+    `;
+    return getScript(id);
+  }
+  const cur = mem.get(id);
+  if (!cur) return undefined;
+  Object.assign(cur, patch);
+  mem.set(id, cur);
+  return cur;
+}
+
 export async function setScriptVideo(
   id: string,
   patch: {
@@ -212,6 +265,8 @@ function rowToScript(r: any): AdScript {
     video_prompt: r.video_prompt ?? null,
     video_model: r.video_model ?? null,
     video_error: r.video_error ?? null,
+    keyframes: (r.keyframes as ScriptKeyframe[] | null) ?? null,
+    keyframes_status: (r.keyframes_status as KeyframesStatus | null) ?? "idle",
     created_at: Number(r.created_at),
   };
 }

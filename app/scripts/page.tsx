@@ -48,6 +48,17 @@ type AdScript = {
   video_url?: string | null;
   video_model?: string | null;
   video_error?: string | null;
+  keyframes?: {
+    idx: number;
+    timestamp_s: number;
+    voiceover: string;
+    visual: string;
+    image_url: string | null;
+    image_prompt: string | null;
+    status: "idle" | "pending" | "ready" | "failed";
+    error: string | null;
+  }[] | null;
+  keyframes_status?: "idle" | "pending" | "ready" | "partial" | "failed";
   created_at: number;
 };
 
@@ -71,16 +82,28 @@ export default function ScriptsPage() {
   const [scripts, setScripts] = useState<AdScript[]>([]);
 
   // Generator inputs (Meta-focused).
-  const [scriptCount, setScriptCount] = useState(10);
+  // Locked to 1 script per generate while we validate the end-to-end loop —
+  // a single Generate click costs ~$0.001 (Gemini script) + $0.21 (5 OpenAI
+  // keyframes) + $0.80 (Veo render) = $1.01. Batch mode comes back once the
+  // single-script path is proven.
+  const scriptCount = 1;
   const [style, setStyle] = useState<ScriptStyle>("mixed");
   const [placement, setPlacement] = useState<"feed" | "reels" | "stories" | "mixed">("mixed");
   const [competitorRefs, setCompetitorRefs] = useState("");
   const [extraNotes, setExtraNotes] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [batchImaging, setBatchImaging] = useState(false);
   const [perScriptImaging, setPerScriptImaging] = useState<Record<string, boolean>>({});
-  const [batchVideoing, setBatchVideoing] = useState(false);
   const [perScriptVideoing, setPerScriptVideoing] = useState<Record<string, boolean>>({});
+  const [perScriptKeyframing, setPerScriptKeyframing] = useState<Record<string, boolean>>({});
+
+  // Diagnostic — the Connoisseur enrichment used on the most recent generate.
+  // Populated from /api/scripts POST response so the operator can see which
+  // tools fed the batch (and which were empty / errored).
+  const [lastEnrichment, setLastEnrichment] = useState<{
+    brand_slug: string;
+    counts: { voice_atoms: number; selling_points: number; winner_combos: number; compliance_gates: number; archetype_performance: number };
+    tool_status: Record<string, string>;
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/products", { cache: "no-store" })
@@ -137,7 +160,12 @@ export default function ScriptsPage() {
       toast.error("Generation failed", data?.error ?? `HTTP ${res.status}`);
       return;
     }
-    toast.success(`Generated ${data?.count ?? 0} scripts`, `Saved to ${selectedProduct?.name}`);
+    setLastEnrichment(data?.enrichment ?? null);
+    const e = data?.enrichment;
+    const enrichSummary = e
+      ? `Enriched by Connoisseur (${e.counts.voice_atoms} voice atoms, ${e.counts.selling_points} selling points, ${e.counts.compliance_gates} gates)`
+      : `Saved to ${selectedProduct?.name}`;
+    toast.success(`Generated ${data?.count ?? 0} scripts`, enrichSummary);
     // Refresh the list.
     fetch(`/api/scripts?product_id=${encodeURIComponent(selectedProductId)}`, { cache: "no-store" })
       .then((r) => r.json())
@@ -174,9 +202,16 @@ export default function ScriptsPage() {
     window.location.href = url;
   }
 
-  // While any image OR video is pending, poll every 4s so the UI catches up.
+  // While any image / video / keyframe is pending, poll every 4s so the UI
+  // catches up. Keyframes stream in one at a time as each OpenAI call lands,
+  // so the polling makes them appear progressively.
   useEffect(() => {
-    const pending = scripts.some((s) => s.image_status === "pending" || s.video_status === "pending");
+    const pending = scripts.some(
+      (s) =>
+        s.image_status === "pending" ||
+        s.video_status === "pending" ||
+        s.keyframes_status === "pending"
+    );
     if (!pending) return;
     const t = setInterval(() => {
       refreshScripts();
@@ -218,70 +253,23 @@ export default function ScriptsPage() {
     refreshScripts();
   }
 
-  async function generateAllVideos(onlyApproved: boolean) {
-    if (!selectedProductId) return;
-    const eligible = scripts.filter(
-      (s) =>
-        (!onlyApproved || s.approved) &&
-        s.image_status === "ready" &&
-        s.video_status !== "ready" &&
-        s.video_status !== "pending"
-    );
-    if (eligible.length === 0) {
-      toast.error("Nothing to generate", "Eligible scripts need a ready image and no existing video. Generate images first.");
-      return;
-    }
-    // Veo 3.1 Fast ~$0.10/sec × 8s = $0.80 per clip.
-    const cost = (eligible.length * 0.8).toFixed(2);
-    if (!confirm(`Generate ${eligible.length} video${eligible.length === 1 ? "" : "s"} via Gemini Veo 3.1 Fast (~$${cost}, audio on, 8s each)?`)) return;
-    setBatchVideoing(true);
+  // Keyframes: 5-image storyboard per script. Each script gets ONE Gemini
+  // decomposition call (~$0.001) + 5 OpenAI gpt-image-2 calls (~$0.21) =
+  // ~$0.21 per script. The first keyframe doubles as the row's lead image,
+  // so the existing Veo first-frame path picks it up unchanged.
+  async function generateKeyframes(id: string) {
+    if (!confirm("Generate a 5-keyframe storyboard for this script via OpenAI gpt-image-2 (~$0.21)?")) return;
+    setPerScriptKeyframing((m) => ({ ...m, [id]: true }));
     setScripts((prev) =>
-      prev.map((s) =>
-        eligible.find((e) => e.id === s.id) ? { ...s, video_status: "pending", video_error: null } : s
-      )
+      prev.map((s) => (s.id === id ? { ...s, keyframes_status: "pending", keyframes: null } : s))
     );
-    const res = await fetch("/api/scripts/batch-videos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: selectedProductId, only_approved: onlyApproved }),
-    });
-    setBatchVideoing(false);
+    const res = await fetch(`/api/scripts/${encodeURIComponent(id)}/keyframes`, { method: "POST" });
+    setPerScriptKeyframing((m) => ({ ...m, [id]: false }));
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error("Batch video generation failed", data?.error ?? `HTTP ${res.status}`);
+      toast.error("Keyframes failed", data?.error ?? `HTTP ${res.status}`);
     } else {
-      toast.success(`Generated ${data?.succeeded ?? 0} videos`, data?.failed ? `${data.failed} failed` : "All done");
-    }
-    refreshScripts();
-  }
-
-  async function generateAllImages(onlyApproved: boolean) {
-    if (!selectedProductId) return;
-    const eligible = scripts.filter((s) => (!onlyApproved || s.approved) && s.image_status !== "ready");
-    if (eligible.length === 0) {
-      toast.error("Nothing to generate", "All eligible scripts already have images. Use Re-render on a row to force a redo.");
-      return;
-    }
-    const cost = (eligible.length * 0.042).toFixed(2);
-    if (!confirm(`Generate ${eligible.length} image${eligible.length === 1 ? "" : "s"} via OpenAI gpt-image-2 (~$${cost})?`)) return;
-    setBatchImaging(true);
-    // Optimistic — flip everything to pending up front.
-    setScripts((prev) =>
-      prev.map((s) =>
-        eligible.find((e) => e.id === s.id) ? { ...s, image_status: "pending", image_error: null } : s
-      )
-    );
-    const res = await fetch("/api/scripts/batch-images", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: selectedProductId, only_approved: onlyApproved }),
-    });
-    setBatchImaging(false);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast.error("Batch image generation failed", data?.error ?? `HTTP ${res.status}`);
-    } else {
-      toast.success(`Generated ${data?.succeeded ?? 0} images`, data?.failed ? `${data.failed} failed` : "All done");
+      toast.success(`Storyboard ready`, `${data?.ready ?? 0}/${data?.total ?? 0} keyframes`);
     }
     refreshScripts();
   }
@@ -448,18 +436,7 @@ export default function ScriptsPage() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: 14, marginTop: 16 }}>
-              <div>
-                <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}># scripts</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={scriptCount}
-                  onChange={(e) => setScriptCount(Number(e.target.value))}
-                  style={{ width: 110 }}
-                />
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 16 }}>
               <div>
                 <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>Style</label>
                 <select value={style} onChange={(e) => setStyle(e.target.value as ScriptStyle)} style={{ width: "100%" }}>
@@ -478,6 +455,9 @@ export default function ScriptsPage() {
                 </select>
               </div>
             </div>
+            <p className="muted-sm" style={{ marginTop: 10, fontSize: 12 }}>
+              <strong style={{ color: "var(--text-2)" }}>Single-script mode:</strong> each Generate click produces one script with 5 keyframe images for visual QA, then an 8s Veo video on demand. Batch mode is paused while we validate the loop end-to-end.
+            </p>
 
             <div style={{ marginTop: 14 }}>
               <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>
@@ -505,7 +485,15 @@ export default function ScriptsPage() {
               />
             </div>
 
-            <div className="row" style={{ marginTop: 14, justifyContent: "flex-end" }}>
+            <div className="row" style={{ marginTop: 14, justifyContent: "space-between", alignItems: "center" }}>
+              {lastEnrichment ? (
+                <div title={`Connoisseur tool status: ${Object.entries(lastEnrichment.tool_status).map(([k, v]) => `${k}=${v}`).join(", ")}`} style={{ fontSize: 11, color: "var(--muted)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ background: "var(--accent-bg, #eef)", color: "var(--accent, #36c)", padding: "2px 8px", borderRadius: 99, fontWeight: 600, letterSpacing: 0.2 }}>
+                    🍄 Enriched by Connoisseur · {lastEnrichment.brand_slug}
+                  </span>
+                  <span>{lastEnrichment.counts.voice_atoms} voice atoms · {lastEnrichment.counts.selling_points} selling points · {lastEnrichment.counts.winner_combos} winners · {lastEnrichment.counts.compliance_gates} gates</span>
+                </div>
+              ) : <span />}
               <button onClick={generate} disabled={generating || !selectedProductId}>
                 {generating ? "Generating…" : <>Generate {scriptCount} <ArrowRight size={14} /></>}
               </button>
@@ -521,21 +509,6 @@ export default function ScriptsPage() {
               </div>
               {scripts.length > 0 && (
                 <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  <button
-                    onClick={() => generateAllImages(false)}
-                    disabled={batchImaging}
-                    title="Generate static ad images for every script via OpenAI gpt-image-2"
-                  >
-                    {batchImaging ? "Generating images…" : "✨ Generate images"}
-                  </button>
-                  <button
-                    className="btn-magenta"
-                    onClick={() => generateAllVideos(false)}
-                    disabled={batchVideoing}
-                    title="Generate 8s ad videos via Gemini Veo 3.1 Fast (image-to-video, audio on). Requires ready images first."
-                  >
-                    {batchVideoing ? "Generating videos…" : "🎬 Generate videos"}
-                  </button>
                   <button className="btn-ghost btn-sm" onClick={() => downloadCsv(true)} title="Approved scripts only">
                     ↓ Approved CSV
                   </button>
@@ -560,8 +533,10 @@ export default function ScriptsPage() {
                     onDelete={() => removeScript(s.id)}
                     onGenerateImage={() => generateOneImage(s.id)}
                     onGenerateVideo={() => generateOneVideo(s.id)}
+                    onGenerateKeyframes={() => generateKeyframes(s.id)}
                     imagingBusy={Boolean(perScriptImaging[s.id])}
                     videoingBusy={Boolean(perScriptVideoing[s.id])}
+                    keyframingBusy={Boolean(perScriptKeyframing[s.id])}
                   />
                 ))}
               </div>
@@ -606,8 +581,10 @@ function ScriptCard({
   onDelete,
   onGenerateImage,
   onGenerateVideo,
+  onGenerateKeyframes,
   imagingBusy,
   videoingBusy,
+  keyframingBusy,
 }: {
   index: number;
   script: AdScript;
@@ -615,13 +592,18 @@ function ScriptCard({
   onDelete: () => void;
   onGenerateImage: () => void;
   onGenerateVideo: () => void;
+  onGenerateKeyframes: () => void;
   imagingBusy: boolean;
   videoingBusy: boolean;
+  keyframingBusy: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const csv = script.script_csv ?? {};
   const imgStatus = script.image_status ?? "idle";
   const vidStatus = script.video_status ?? "idle";
+  const kfStatus = script.keyframes_status ?? "idle";
+  const keyframes = script.keyframes ?? [];
+  const hasKeyframes = keyframes.length > 0;
   const isPortrait = script.placement !== "feed";
   const imgAspect = isPortrait ? "9/16" : "1/1";
   const imageDownloadName = `script_${String(index).padStart(2, "0")}.png`;
@@ -853,6 +835,128 @@ function ScriptCard({
           )}
         </div>
       </div>
+
+      {/* Keyframe storyboard — 5 images sweeping the 8s video. Used to QA visual
+          consistency BEFORE paying for Veo. First keyframe doubles as the
+          image_url + Veo first-frame, so a sane storyboard guarantees a sane
+          video. */}
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div>
+            <span className="eyebrow">Keyframe storyboard</span>
+            <p className="muted-sm" style={{ marginTop: 2, fontSize: 11 }}>
+              {hasKeyframes
+                ? `${keyframes.filter((k) => k.status === "ready").length} / ${keyframes.length} keyframes ready`
+                : "5-image storyboard across the 8s video — verify visual consistency before rendering."}
+            </p>
+          </div>
+          <button
+            className="btn-ghost btn-sm"
+            onClick={onGenerateKeyframes}
+            disabled={keyframingBusy || kfStatus === "pending"}
+            title="Generate 5 keyframes via OpenAI gpt-image-2 (~$0.21). The first keyframe also becomes the Veo first-frame."
+            style={{ fontSize: 11 }}
+          >
+            {keyframingBusy || kfStatus === "pending"
+              ? "Generating…"
+              : hasKeyframes
+                ? "↻ Regen storyboard"
+                : "🎞️ Generate storyboard"}
+          </button>
+        </div>
+        {hasKeyframes && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+            {keyframes.map((kf) => (
+              <KeyframeTile
+                key={kf.idx}
+                kf={kf}
+                aspect={imgAspect}
+                downloadName={`script_${String(index).padStart(2, "0")}_keyframe_${kf.idx + 1}.png`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KeyframeTile({
+  kf,
+  aspect,
+  downloadName,
+}: {
+  kf: NonNullable<AdScript["keyframes"]>[number];
+  aspect: string;
+  downloadName: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          width: "100%",
+          aspectRatio: aspect,
+          borderRadius: 6,
+          background: "#000",
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        title={kf.visual}
+      >
+        {kf.image_url ? (
+          <img src={kf.image_url} alt={`Keyframe ${kf.idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span className="muted-sm" style={{ fontSize: 10 }}>
+            {kf.status === "pending" ? "…" : kf.status === "failed" ? "Failed" : "Empty"}
+          </span>
+        )}
+        {kf.status === "pending" && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10 }}>
+            …
+          </div>
+        )}
+        <div
+          style={{
+            position: "absolute",
+            top: 4,
+            left: 4,
+            padding: "2px 6px",
+            background: "rgba(0,0,0,0.7)",
+            color: "#fff",
+            fontSize: 9,
+            fontFamily: "var(--font-mono, ui-monospace, monospace)",
+            borderRadius: 3,
+          }}
+        >
+          {kf.timestamp_s}s
+        </div>
+      </div>
+      <div style={{ marginTop: 4, fontSize: 10, color: "var(--muted)", lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+        {kf.voiceover ? `"${kf.voiceover.slice(0, 60)}${kf.voiceover.length > 60 ? "…" : ""}"` : <span style={{ opacity: 0.5 }}>(ambient)</span>}
+      </div>
+      {kf.image_url && (
+        <a
+          href={`${kf.image_url}${kf.image_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(downloadName)}`}
+          download={downloadName}
+          style={{
+            display: "block",
+            textAlign: "center",
+            marginTop: 4,
+            fontSize: 10,
+            color: "var(--muted-2)",
+            textDecoration: "none",
+          }}
+        >
+          ↓ PNG
+        </a>
+      )}
+      {kf.error && (
+        <p style={{ color: "#ff6b6b", fontSize: 9, marginTop: 4 }}>{kf.error}</p>
+      )}
     </div>
   );
 }
