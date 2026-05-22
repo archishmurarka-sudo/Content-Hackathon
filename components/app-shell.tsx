@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileVideo2, Users, Package, Send, Settings, Activity, Presentation, ScrollText, BookOpen, Camera } from "lucide-react";
+import { LayoutDashboard, FileVideo2, Users, Package, Send, Settings, Activity, Presentation, ScrollText, BookOpen, Camera, UserCircle } from "lucide-react";
 
 type Usage = { storyboard: number; frame_image: number; video_render: number; estimated_cost_usd: number };
 type Health = { commit_sha: string | null; db: { reachable: boolean; brief_count: number | null } };
@@ -13,10 +13,11 @@ const NAV: Array<{ section?: string; items: { href: string; label: string; icon:
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
       { href: "/briefs", label: "Briefs", icon: FileVideo2 },
-      { href: "/scripts", label: "Scripts", icon: ScrollText },
+      { href: "/scripts", label: "Meta Ads", icon: ScrollText },
       { href: "/instagram", label: "Instagram", icon: Camera },
       { href: "/research", label: "Research", icon: BookOpen },
       { href: "/creators", label: "Creators", icon: Users },
+      { href: "/avatars", label: "Avatars", icon: UserCircle },
       { href: "/products", label: "Products", icon: Package },
     ],
   },

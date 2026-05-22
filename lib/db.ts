@@ -180,6 +180,28 @@ export async function ensureSchema(): Promise<void> {
     await s`CREATE INDEX IF NOT EXISTS ig_posts_created_at_idx ON ig_posts (created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS ig_posts_product_idx ON ig_posts (product_id, created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS ig_posts_published_idx ON ig_posts (published_at DESC) WHERE published_at IS NOT NULL;`;
+
+    // Avatars — reusable house cast for synthetic UGC. Each avatar locks one
+    // protagonist (the same 10-field persona shape we generate per-script)
+    // plus optional face reference photos and a TTS voice_id. Scripts can
+    // pick an avatar so the SAME face/voice appears across every script for
+    // a brand instead of Gemini re-picking a stranger each time.
+    await s`
+      CREATE TABLE IF NOT EXISTS avatars (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        brand_slug      TEXT,            -- which Connoisseur brand this avatar belongs to (nullable for unbranded)
+        persona         JSONB NOT NULL,  -- { age_range, gender, ethnicity, body_type, hair, wardrobe, vibe, setting, lighting, camera_style }
+        face_image_urls JSONB,           -- string[] — R2 URLs of face reference photos, appended in upload order
+        voice_id        TEXT,            -- ElevenLabs (or other TTS) voice id; left null until audio pipeline lands
+        voice_provider  TEXT,            -- "elevenlabs" | "openai" | etc.
+        notes           TEXT,            -- operator scratchpad
+        created_at      BIGINT NOT NULL,
+        updated_at      BIGINT NOT NULL
+      );
+    `;
+    await s`CREATE INDEX IF NOT EXISTS avatars_brand_idx ON avatars (brand_slug, created_at DESC);`;
+    await s`CREATE INDEX IF NOT EXISTS avatars_created_at_idx ON avatars (created_at DESC);`;
   })();
   return g.__schemaReady;
 }
