@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, FileText, Sparkles, Package, Beaker } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 
 type Product = {
   id: string;
@@ -104,6 +105,8 @@ export default function ScriptsPage() {
     counts: { voice_atoms: number; selling_points: number; winner_combos: number; compliance_gates: number; archetype_performance: number };
     tool_status: Record<string, string>;
   } | null>(null);
+  // Per-generation operator toggle — default ON.
+  const [enrichWithConnoisseur, setEnrichWithConnoisseur] = useState(true);
 
   useEffect(() => {
     fetch("/api/products", { cache: "no-store" })
@@ -152,6 +155,7 @@ export default function ScriptsPage() {
         placement,
         competitor_refs: competitorRefs.trim() || undefined,
         notes: extraNotes.trim() || undefined,
+        enrich_with_connoisseur: enrichWithConnoisseur,
       }),
     });
     setGenerating(false);
@@ -164,7 +168,9 @@ export default function ScriptsPage() {
     const e = data?.enrichment;
     const enrichSummary = e
       ? `Enriched by Connoisseur (${e.counts.voice_atoms} voice atoms, ${e.counts.selling_points} selling points, ${e.counts.compliance_gates} gates)`
-      : `Saved to ${selectedProduct?.name}`;
+      : enrichWithConnoisseur
+        ? `Saved to ${selectedProduct?.name} (Connoisseur enrichment skipped — MCP empty or unreachable)`
+        : `Saved to ${selectedProduct?.name} (Connoisseur disabled)`;
     toast.success(`Generated ${data?.count ?? 0} scripts`, enrichSummary);
     // Refresh the list.
     fetch(`/api/scripts?product_id=${encodeURIComponent(selectedProductId)}`, { cache: "no-store" })
@@ -485,15 +491,14 @@ export default function ScriptsPage() {
               />
             </div>
 
-            <div className="row" style={{ marginTop: 14, justifyContent: "space-between", alignItems: "center" }}>
-              {lastEnrichment ? (
-                <div title={`Connoisseur tool status: ${Object.entries(lastEnrichment.tool_status).map(([k, v]) => `${k}=${v}`).join(", ")}`} style={{ fontSize: 11, color: "var(--muted)", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ background: "var(--accent-bg, #eef)", color: "var(--accent, #36c)", padding: "2px 8px", borderRadius: 99, fontWeight: 600, letterSpacing: 0.2 }}>
-                    🍄 Enriched by Connoisseur · {lastEnrichment.brand_slug}
-                  </span>
-                  <span>{lastEnrichment.counts.voice_atoms} voice atoms · {lastEnrichment.counts.selling_points} selling points · {lastEnrichment.counts.winner_combos} winners · {lastEnrichment.counts.compliance_gates} gates</span>
-                </div>
-              ) : <span />}
+            <div className="row" style={{ marginTop: 14, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+              <ConnoisseurToggle
+                enabled={enrichWithConnoisseur}
+                onChange={setEnrichWithConnoisseur}
+                lastSummary={lastEnrichment
+                  ? `${lastEnrichment.brand_slug} · ${lastEnrichment.counts.voice_atoms} atoms · ${lastEnrichment.counts.selling_points} SP · ${lastEnrichment.counts.compliance_gates} gates`
+                  : null}
+              />
               <button onClick={generate} disabled={generating || !selectedProductId}>
                 {generating ? "Generating…" : <>Generate {scriptCount} <ArrowRight size={14} /></>}
               </button>

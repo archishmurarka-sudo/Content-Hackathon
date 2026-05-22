@@ -98,6 +98,17 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
   const [perShotVideoBusy, setPerShotVideoBusy] = useState<Record<number, boolean>>({});
   const [stitching, setStitching] = useState(false);
   const [stitchError, setStitchError] = useState<string | null>(null);
+  // Connoisseur pre-ship check result — populated by polling
+  // /api/briefs/:id/pre-ship which reads the latest brief.pre_ship_check
+  // event (set fire-and-forget once the storyboard lands).
+  const [preShip, setPreShip] = useState<{
+    flags: { rule: string; severity?: string; evidence?: string | null }[];
+    passed: boolean | null;
+    flag_count: number;
+    checked_at: number | null;
+    ok: boolean | null;
+    brand_slug?: string | null;
+  } | null>(null);
   // WhatsApp is the active delivery channel right now (Periskope is live;
   // Resend isn't wired on the Railway service yet).
   const [deliveryChannel, setDeliveryChannel] = useState<"email" | "whatsapp">("whatsapp");
@@ -122,6 +133,29 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
     load();
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
+  }, [id]);
+
+  // Poll the pre-ship-check endpoint until a result lands (the storyboard
+  // route schedules it fire-and-forget right after the storyboard saves).
+  // Stop polling once we've got one OR after ~60s — whichever first.
+  useEffect(() => {
+    let cancelled = false;
+    let tries = 0;
+    async function tick() {
+      if (cancelled) return;
+      try {
+        const r = await fetch(`/api/briefs/${id}/pre-ship`, { cache: "no-store" });
+        if (r.ok) {
+          const d = await r.json();
+          if (!cancelled) setPreShip(d);
+          if (d?.checked_at) return; // done — no more polling
+        }
+      } catch { /* swallow */ }
+      tries += 1;
+      if (tries < 12) setTimeout(tick, 5000);
+    }
+    tick();
+    return () => { cancelled = true; };
   }, [id]);
 
   // Pull /api/health once on mount so we know which downstream stages are wired
@@ -422,6 +456,41 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
             {brief.storyboard.inspired_by_video_ids?.length > 0 && (
               <div className="muted-sm mono" style={{ marginTop: 14 }}>
                 Inspired by: {brief.storyboard.inspired_by_video_ids.join(" · ")}
+              </div>
+            )}
+            {preShip?.checked_at && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: preShip.flag_count > 0 ? 8 : 0 }}>
+                  <div className="eyebrow" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    🍄 Connoisseur pre-ship check
+                    {preShip.brand_slug && <span className="muted-sm mono" style={{ fontSize: 10 }}>· {preShip.brand_slug}</span>}
+                  </div>
+                  <span className="badge" style={{
+                    background: preShip.passed ? "var(--success-soft, #e6f5ec)" : "var(--danger-soft)",
+                    color: preShip.passed ? "var(--success, #1a7a3a)" : "var(--danger)",
+                    borderColor: "var(--border)",
+                  }}>
+                    {preShip.passed ? `✓ Passed` : `${preShip.flag_count} flag${preShip.flag_count === 1 ? "" : "s"}`}
+                  </span>
+                </div>
+                {preShip.flags.length > 0 && (
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-2)" }}>
+                    {preShip.flags.slice(0, 6).map((f, i) => (
+                      <li key={i} style={{ marginBottom: 4 }}>
+                        <strong>{f.severity && f.severity !== "info" ? `[${f.severity}] ` : ""}</strong>{f.rule}
+                        {f.evidence && <span className="muted-sm" style={{ marginLeft: 6 }}>— "{f.evidence}"</span>}
+                      </li>
+                    ))}
+                    {preShip.flags.length > 6 && (
+                      <li className="muted-sm">…and {preShip.flags.length - 6} more</li>
+                    )}
+                  </ul>
+                )}
+                {preShip.ok === false && (
+                  <div className="muted-sm" style={{ marginTop: 6 }}>
+                    (Connoisseur MCP was unreachable — pre-ship-check skipped.)
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -94,7 +94,9 @@ Rules:
   const p = JSON.parse(cleaned);
 
   // Mirror video covers in parallel — runs while we're returning the row.
-  const recentSlice = posts.slice(0, 6);
+  // Bumped from 6 → 10 so image generation has a deeper pool of real
+  // on-camera stills of the creator to use as likeness references.
+  const recentSlice = posts.slice(0, 10);
   const mirroredCovers = await Promise.all(
     recentSlice.map((post) => {
       const url = post.videoMeta?.coverUrl || post.videoMeta?.originalCoverUrl;

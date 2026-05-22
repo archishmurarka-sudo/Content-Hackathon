@@ -66,7 +66,7 @@ export async function scrapeTikTokProfile(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       profiles: [handle],
-      resultsPerPage: opts.resultsPerPage ?? 10,
+      resultsPerPage: opts.resultsPerPage ?? 12,
       shouldDownloadVideos: false,
       shouldDownloadCovers: false,
       shouldDownloadSlideshowImages: false,

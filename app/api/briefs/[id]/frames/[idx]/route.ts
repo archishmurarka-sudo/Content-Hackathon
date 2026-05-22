@@ -71,6 +71,12 @@ export async function POST(
   const product = findProduct(brief.product_id);
   const productLabel = product ? `${product.name} (${product.brand})` : undefined;
   const productHero = product?.hero_image_url ?? undefined;
+  const creatorAvatar = creator?.avatar_url ?? undefined;
+  const creatorReferences = (creator?.recent_videos ?? [])
+    .map((v) => v.cover_url)
+    .filter((u): u is string => Boolean(u))
+    .slice(0, 3);
+  const funnelStage = brief.funnel_stage ?? "BOF";
 
   // Snapshot the pre-regen state so we can log a clean (before, after) pair
   // for training: original prompt + the image it produced, then the new prompt
@@ -83,10 +89,13 @@ export async function POST(
       prompt: promptText,
       brief_id: id,
       shot_idx: idx,
+      funnel_stage: funnelStage,
       product_label: productLabel,
       product_hero_url: productHero,
       creator_handle: brief.creator_handle,
       creator_archetype: creator?.archetype,
+      creator_avatar_url: creatorAvatar,
+      creator_reference_urls: creatorReferences,
       shot_visual: shot.visual,
       shot_product_action: shot.product_action,
       shot_overlay: shot.overlay,

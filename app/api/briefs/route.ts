@@ -6,6 +6,7 @@ import { generateFrameImage } from "@/lib/images";
 import { fetchYouTubeVideo } from "@/lib/youtube";
 import { logEvent } from "@/lib/events";
 import { isAuthed } from "@/lib/auth";
+import { fetchScriptEnrichment, preShipCheck, brandSlugForProduct } from "@/lib/connoisseur_enrichment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest) {
   const funnel_stage: "BOF" | "MOF" | "TOF" =
     funnel_raw === "MOF" || funnel_raw === "TOF" ? funnel_raw : "BOF";
   const youtube_url = typeof body.youtube_url === "string" ? body.youtube_url.trim() : "";
+  // Operator toggle — when false, skip the Connoisseur enrichment and
+  // pre-ship check entirely. Defaults to true.
+  const enrich_with_connoisseur = body.enrich_with_connoisseur !== false;
 
   if (!handle) return NextResponse.json({ error: "creator_handle required" }, { status: 400 });
   // Hydrate from Postgres so creators onboarded via /api/creators/scrape on a
@@ -53,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const brief = await createBrief({ creator_handle: creator.handle, product_id, target_duration_s, youtube_ref });
+  const brief = await createBrief({ creator_handle: creator.handle, product_id, target_duration_s, funnel_stage, youtube_ref });
   void logEvent({
     type: "brief.created",
     brief_id: brief.id,
@@ -81,6 +85,13 @@ export async function POST(req: NextRequest) {
     if (prototypes.length === 0) {
       throw new Error("no matching prototypes found");
     }
+    // Live Connoisseur corpus enrichment (voice atoms + selling points +
+    // winners + gates + archetype perf). Soft-fails so MCP downtime never
+    // blocks brief generation. Skipped entirely when the operator turned
+    // the toggle off.
+    const enrichment = enrich_with_connoisseur
+      ? await fetchScriptEnrichment(product).catch(() => undefined)
+      : undefined;
     const sb = await generateStoryboard({
       creator,
       product,
@@ -88,6 +99,7 @@ export async function POST(req: NextRequest) {
       target_duration_s,
       funnel_stage,
       youtube_ref,
+      enrichment,
     });
     await setStoryboard(brief.id, { ...sb, brief_id: brief.id });
     void logEvent({
@@ -98,6 +110,14 @@ export async function POST(req: NextRequest) {
         product_id,
         funnel_stage,
         inspired_by_video_ids: prototypes.map((p) => p.video_id),
+        connoisseur_enriched: Boolean(enrichment),
+        enrichment_counts: enrichment ? {
+          voice_atoms: enrichment.voice_atoms.length,
+          selling_points: enrichment.selling_points.length,
+          winner_combos: enrichment.winner_combos.length,
+          compliance_gates: enrichment.compliance_gates.length,
+          archetype_performance: enrichment.archetype_performance.length,
+        } : null,
       },
       outcome: {
         hook: sb.hook,
@@ -109,10 +129,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Pre-ship check (fire-and-forget) — run the storyboard's speech lines
+    // past the Connoisseur compliance gates and log any flags. We do NOT
+    // block frame generation on this; flags surface on the brief detail page
+    // so the operator can act before the spend on video render.
+    void (async () => {
+      const scriptText = sb.shots.map((s) => s.speech).filter(Boolean).join(" ");
+      const sellingUsed = enrichment?.selling_points.slice(0, 8).map((s) => s.point) ?? [];
+      const psc = await preShipCheck({ brand_slug: brandSlugForProduct(product), script_text: scriptText, selling_points_used: sellingUsed });
+      void logEvent({
+        type: "brief.pre_ship_check",
+        brief_id: brief.id,
+        payload: { creator_handle: creator.handle, product_id, brand_slug: brandSlugForProduct(product), tool_ok: psc.ok },
+        outcome: { passed: psc.passed, flag_count: psc.flags.length, flags: psc.flags.slice(0, 20) },
+      });
+    })().catch(() => {});
+
     // Fire-and-forget: auto-generate frames as soon as the storyboard is ready.
     // We don't await — the POST returns immediately with the storyboard, and
     // the brief detail page polls for frames as they finish.
-    void autoGenerateFrames(brief.id, creator, product).catch(() => {});
+    void autoGenerateFrames(brief.id, creator, product, funnel_stage).catch(() => {});
   } catch (err: any) {
     await setFailed(brief.id, err?.message ?? "storyboard generation failed");
     void logEvent({
@@ -128,7 +164,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(await updated);
 }
 
-async function autoGenerateFrames(briefId: string, creator: { handle: string; archetype: string }, product: Product) {
+async function autoGenerateFrames(
+  briefId: string,
+  creator: { handle: string; archetype: string; avatar_url?: string | null; recent_videos?: { cover_url?: string | null }[] },
+  product: Product,
+  funnel_stage: "BOF" | "MOF" | "TOF",
+) {
   const { getBrief } = await import("@/lib/briefs");
   const b = await getBrief(briefId);
   if (!b?.storyboard) return;
@@ -136,6 +177,11 @@ async function autoGenerateFrames(briefId: string, creator: { handle: string; ar
   await initFrames(briefId);
   const productLabel = `${product.name} (${product.brand})`;
   const productHero = product.hero_image_url ?? undefined;
+  const creatorAvatar = creator.avatar_url ?? undefined;
+  const creatorReferences = (creator.recent_videos ?? [])
+    .map((v) => v.cover_url)
+    .filter((u): u is string => Boolean(u))
+    .slice(0, 3);
 
   await Promise.all(
     b.storyboard.shots.map(async (shot) => {
@@ -144,10 +190,13 @@ async function autoGenerateFrames(briefId: string, creator: { handle: string; ar
           prompt: shot.image_prompt,
           brief_id: briefId,
           shot_idx: shot.idx,
+          funnel_stage,
           product_label: productLabel,
           product_hero_url: productHero,
           creator_handle: creator.handle,
           creator_archetype: creator.archetype,
+          creator_avatar_url: creatorAvatar,
+          creator_reference_urls: creatorReferences,
           shot_visual: shot.visual,
           shot_product_action: shot.product_action,
           shot_overlay: shot.overlay,

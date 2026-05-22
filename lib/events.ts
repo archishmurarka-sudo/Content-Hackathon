@@ -36,7 +36,10 @@ export type EventType =
   // delivery
   | "send.email"
   | "send.whatsapp"
-  | "send.failed";
+  | "send.failed"
+  // connoisseur enrichment
+  | "scripts.enriched"
+  | "brief.pre_ship_check";
 
 export type LogEventInput = {
   type: EventType;

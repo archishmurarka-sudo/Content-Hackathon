@@ -52,6 +52,10 @@ export type Brief = {
   creator_handle: string;
   product_id: string;
   target_duration_s: number;
+  // BOF = product-hero / no-faces; MOF = creator+product talking-head;
+  // TOF = creator-centric story moment. Drives the storyboard prompt + the
+  // image-gen aesthetic. Defaults to BOF on legacy rows.
+  funnel_stage?: "BOF" | "MOF" | "TOF";
   status: BriefStatus;
   storyboard?: Storyboard;
   frames?: Frame[];
@@ -96,8 +100,8 @@ async function dbInsert(brief: Brief): Promise<Brief> {
   await ensureSchema();
   const s = sql();
   await s`
-    INSERT INTO briefs (id, creator_handle, product_id, target_duration_s, status, storyboard, frames, youtube_ref, delivery, error, created_at, updated_at)
-    VALUES (${brief.id}, ${brief.creator_handle}, ${brief.product_id}, ${brief.target_duration_s}, ${brief.status},
+    INSERT INTO briefs (id, creator_handle, product_id, target_duration_s, funnel_stage, status, storyboard, frames, youtube_ref, delivery, error, created_at, updated_at)
+    VALUES (${brief.id}, ${brief.creator_handle}, ${brief.product_id}, ${brief.target_duration_s}, ${brief.funnel_stage ?? "BOF"}, ${brief.status},
             ${brief.storyboard ? s.json(brief.storyboard) : null},
             ${brief.frames ? s.json(brief.frames) : null},
             ${brief.youtube_ref ? s.json(brief.youtube_ref) : null},
@@ -164,6 +168,7 @@ function rowToBrief(r: any): Brief {
     creator_handle: r.creator_handle,
     product_id: r.product_id,
     target_duration_s: Number(r.target_duration_s),
+    funnel_stage: (r.funnel_stage as "BOF" | "MOF" | "TOF" | null) ?? "BOF",
     status: r.status as BriefStatus,
     storyboard: r.storyboard ?? undefined,
     frames: r.frames ?? undefined,
@@ -183,6 +188,7 @@ export async function createBrief(input: {
   creator_handle: string;
   product_id: string;
   target_duration_s: number;
+  funnel_stage?: "BOF" | "MOF" | "TOF";
   youtube_ref?: YouTubeVideo;
 }): Promise<Brief> {
   const brief: Brief = {
@@ -190,6 +196,7 @@ export async function createBrief(input: {
     creator_handle: input.creator_handle,
     product_id: input.product_id,
     target_duration_s: input.target_duration_s,
+    funnel_stage: input.funnel_stage ?? "BOF",
     youtube_ref: input.youtube_ref,
     status: "generating_storyboard",
     created_at: Date.now(),

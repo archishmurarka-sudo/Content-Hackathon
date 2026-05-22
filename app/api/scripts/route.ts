@@ -6,6 +6,8 @@ import { isAuthed } from "@/lib/auth";
 import { ensureProductsLoaded, findProduct } from "@/lib/data";
 import { generateScripts, type ScriptStyle, type Placement } from "@/lib/script-generator";
 import { insertScripts, listScriptsForProduct, newBatchId } from "@/lib/ad-scripts";
+import { fetchScriptEnrichment } from "@/lib/connoisseur_enrichment";
+import { logEvent } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +36,10 @@ export async function POST(req: NextRequest) {
   const placement: Placement = VALID_PLACEMENTS.includes(body.placement) ? body.placement : "mixed";
   const competitor_refs = typeof body.competitor_refs === "string" ? body.competitor_refs : undefined;
   const notes = typeof body.notes === "string" ? body.notes : undefined;
+  // Operator toggle — when false, skip the Connoisseur MCP fetch entirely
+  // (no enrichment block in the Gemini prompt, no scripts.enriched event).
+  // Defaults to true so the corpus is on by default; the UI exposes it.
+  const enrich_with_connoisseur = body.enrich_with_connoisseur !== false;
 
   await ensureProductsLoaded();
   const product = findProduct(product_id);
@@ -43,6 +49,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "GEMINI_API_KEY not set on the server" }, { status: 500 });
   }
 
+  // Fetch Connoisseur enrichment (voice atoms, selling points, winners,
+  // compliance gates, archetype perf) in parallel — soft-fails to undefined
+  // so MCP downtime never blocks script generation. Skipped entirely when
+  // the operator turned the toggle off.
+  const enrichment = enrich_with_connoisseur
+    ? await fetchScriptEnrichment(product).catch(() => undefined)
+    : undefined;
+
   try {
     const generated = await generateScripts({
       product,
@@ -51,13 +65,54 @@ export async function POST(req: NextRequest) {
       placement,
       competitor_refs,
       notes,
+      enrichment,
     });
     if (generated.length === 0) {
       return NextResponse.json({ error: "Gemini returned no scripts" }, { status: 502 });
     }
     const batch_id = newBatchId();
     const saved = await insertScripts({ product_id, batch_id, scripts: generated });
-    return NextResponse.json({ count: saved.length, batch_id, scripts: saved });
+
+    // Append-only log of what fed the batch — supports future model
+    // fine-tuning and lets the operator audit the enrichment after the fact.
+    if (enrichment) {
+      void logEvent({
+        type: "scripts.enriched",
+        brief_id: batch_id,
+        payload: {
+          product_id,
+          batch_id,
+          brand_slug: enrichment.brand_slug,
+          counts: {
+            voice_atoms: enrichment.voice_atoms.length,
+            selling_points: enrichment.selling_points.length,
+            winner_combos: enrichment.winner_combos.length,
+            compliance_gates: enrichment.compliance_gates.length,
+            archetype_performance: enrichment.archetype_performance.length,
+          },
+          tool_status: enrichment.tool_status,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      count: saved.length,
+      batch_id,
+      scripts: saved,
+      enrichment: enrichment
+        ? {
+            brand_slug: enrichment.brand_slug,
+            counts: {
+              voice_atoms: enrichment.voice_atoms.length,
+              selling_points: enrichment.selling_points.length,
+              winner_combos: enrichment.winner_combos.length,
+              compliance_gates: enrichment.compliance_gates.length,
+              archetype_performance: enrichment.archetype_performance.length,
+            },
+            tool_status: enrichment.tool_status,
+          }
+        : null,
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? "generation failed" }, { status: 502 });
   }

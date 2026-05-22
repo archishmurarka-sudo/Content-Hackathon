@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Camera as Instagram, Sparkles, Trash2, Copy, Upload, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { BrandContextPanel } from "@/components/brand-context-panel";
+import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 import type { BrandContext } from "@/lib/brand-context";
 
 type Product = { id: string; name: string; brand: string; one_liner?: string };
@@ -272,28 +273,9 @@ export default function InstagramPage() {
             </p>
           </div>
 
-          <label
-            style={{
-              marginTop: 14,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 12,
-              color: "var(--text, #222)",
-              cursor: "pointer",
-              userSelect: "none",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={useBrandIntel}
-              onChange={(e) => setUseBrandIntel(e.target.checked)}
-            />
-            Use brand intelligence
-            <span className="muted-sm" style={{ fontSize: 11 }}>
-              · pull winning selling points + voice atoms from Connoisseur when available
-            </span>
-          </label>
+          <div style={{ marginTop: 14 }}>
+            <ConnoisseurToggle enabled={useBrandIntel} onChange={setUseBrandIntel} />
+          </div>
 
           {error && <p style={{ color: "var(--danger, #d33)", marginTop: 12, fontSize: 13 }}>{error}</p>}
         </form>

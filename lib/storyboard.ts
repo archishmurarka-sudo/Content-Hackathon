@@ -30,6 +30,8 @@ export type Storyboard = {
 };
 
 import { resolveTextModel } from "./models";
+import type { ScriptEnrichment } from "./connoisseur_enrichment";
+import { renderEnrichmentForPrompt } from "./connoisseur_enrichment";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -60,6 +62,7 @@ function buildPrompt(
   target_s: number,
   funnel_stage: FunnelStage,
   youtubeRef?: YouTubeVideo,
+  enrichment?: ScriptEnrichment,
 ) {
   const funnel = FUNNEL_INTENT[funnel_stage];
   const protoSummary = prototypes
@@ -126,7 +129,7 @@ Description: ${(youtubeRef.description ?? "").slice(0, 400)}`
     : ""
 }
 
-CREATOR GENDER PRESENTATION (for the OFF-CAMERA voiceover only — no face)
+${enrichment ? `\n${renderEnrichmentForPrompt(enrichment)}\n\n` : ""}CREATOR GENDER PRESENTATION (for the OFF-CAMERA voiceover only — no face)
 This is a hands-and-product BOF format with ZERO faces visible. Infer the
 creator's gender presentation from handle + archetype + dossier and output
 it as "creator_gender" — it locks the gender of the OFF-CAMERA narrator
@@ -292,6 +295,7 @@ export async function generateStoryboard(opts: {
   target_duration_s: number;
   funnel_stage?: FunnelStage;
   youtube_ref?: YouTubeVideo;
+  enrichment?: ScriptEnrichment;
 }): Promise<Omit<Storyboard, "brief_id">> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
@@ -303,6 +307,7 @@ export async function generateStoryboard(opts: {
     opts.target_duration_s,
     opts.funnel_stage ?? "BOF",
     opts.youtube_ref,
+    opts.enrichment,
   );
 
   const model = resolveTextModel();

@@ -13,6 +13,7 @@ import { findProduct, ensureProductsLoaded } from "./data";
 import { generateAdImage, type ImageAspect } from "./openai-images";
 import { bump } from "./usage";
 import { brandGuidelinesFor, renderGuidelinesForPrompt } from "./brand-guidelines";
+import { renderEnrichmentForPrompt } from "./connoisseur_enrichment";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -290,6 +291,7 @@ async function draftCreative(opts: {
   audience: string;
   vibe: string;
   format: IgFormat;
+  enrichment?: import("./connoisseur_enrichment").ScriptEnrichment;
 }): Promise<{ image_prompt: string; caption: string; hashtags: string[] }> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY not set");
@@ -330,7 +332,7 @@ ${audienceLine}
 Vibe: ${opts.vibe || "(default brand vibe)"}
 Placement: ${formatHint}
 
-CRITICAL — every output must pass the brand voice + compliance rules above. If the theme would force a non-compliant phrasing (e.g. "before/after" implying a cure), reframe to a compliant alternative (e.g. "ritual" / "social proof") in the caption rather than breaking the rules.
+${opts.enrichment ? `\n${renderEnrichmentForPrompt(opts.enrichment)}\n\n` : ""}CRITICAL — every output must pass the brand voice + compliance rules above. If the theme would force a non-compliant phrasing (e.g. "before/after" implying a cure), reframe to a compliant alternative (e.g. "ritual" / "social proof") in the caption rather than breaking the rules.
 
 Output a single JSON object with EXACTLY these keys, no markdown:
 {

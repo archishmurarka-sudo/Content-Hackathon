@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Sparkles, Send, TrendingUp, Image as ImageIcon, ArrowRight } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 
 type Creator = {
   handle: string;
@@ -75,6 +76,10 @@ function Home() {
   const [productId, setProductId] = useState("ashwamag");
   const [duration, setDuration] = useState(20);
   const [funnelStage, setFunnelStage] = useState<"BOF" | "MOF" | "TOF">("BOF");
+  // Per-generation toggle for Connoisseur enrichment. Default ON — when off,
+  // the brief is built without the corpus block in the storyboard prompt and
+  // the post-storyboard compliance pre-ship check is also skipped server-side.
+  const [enrichWithConnoisseur, setEnrichWithConnoisseur] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -147,7 +152,7 @@ function Home() {
     const res = await fetch("/api/briefs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ creator_handle: handle, product_id: productId, target_duration_s: duration, funnel_stage: funnelStage }),
+      body: JSON.stringify({ creator_handle: handle, product_id: productId, target_duration_s: duration, funnel_stage: funnelStage, enrich_with_connoisseur: enrichWithConnoisseur }),
     });
     setSubmitting(false);
     const data = await res.json().catch(() => ({}));
@@ -233,27 +238,30 @@ function Home() {
               {submitting ? "Generating…" : <>Generate <ArrowRight size={14} /></>}
             </button>
           </div>
-          <div className="row" style={{ marginTop: 14, gap: 8, alignItems: "center" }}>
-            <span className="muted-sm" style={{ marginRight: 4 }}>Funnel stage:</span>
-            {(["BOF", "MOF", "TOF"] as const).map((stage) => (
-              <button
-                key={stage}
-                type="button"
-                onClick={() => setFunnelStage(stage)}
-                className={funnelStage === stage ? "" : "btn-ghost btn-sm"}
-                style={{
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  border: funnelStage === stage ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  background: funnelStage === stage ? "var(--accent)" : "transparent",
-                  color: funnelStage === stage ? "var(--accent-fg)" : "var(--text-2)",
-                  borderRadius: 999,
-                  fontWeight: funnelStage === stage ? 600 : 500,
-                }}
-              >
-                {stage === "BOF" ? "Bottom · hard sell" : stage === "MOF" ? "Middle · consideration" : "Top · awareness"}
-              </button>
-            ))}
+          <div className="row" style={{ marginTop: 14, gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div className="row" style={{ gap: 8, alignItems: "center" }}>
+              <span className="muted-sm" style={{ marginRight: 4 }}>Funnel stage:</span>
+              {(["BOF", "MOF", "TOF"] as const).map((stage) => (
+                <button
+                  key={stage}
+                  type="button"
+                  onClick={() => setFunnelStage(stage)}
+                  className={funnelStage === stage ? "" : "btn-ghost btn-sm"}
+                  style={{
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    border: funnelStage === stage ? "1px solid var(--accent)" : "1px solid var(--border)",
+                    background: funnelStage === stage ? "var(--accent)" : "transparent",
+                    color: funnelStage === stage ? "var(--accent-fg)" : "var(--text-2)",
+                    borderRadius: 999,
+                    fontWeight: funnelStage === stage ? 600 : 500,
+                  }}
+                >
+                  {stage === "BOF" ? "Bottom · hard sell" : stage === "MOF" ? "Middle · consideration" : "Top · awareness"}
+                </button>
+              ))}
+            </div>
+            <ConnoisseurToggle enabled={enrichWithConnoisseur} onChange={setEnrichWithConnoisseur} />
           </div>
           {error && <p style={{ color: "var(--danger)", marginTop: 12, fontSize: 13 }}>{error}</p>}
         </form>
