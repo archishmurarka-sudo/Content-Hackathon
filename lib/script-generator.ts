@@ -67,6 +67,17 @@ export type GenerateInput = {
   enrichment?: ScriptEnrichment;
 };
 
+// Maps the operator's chosen style to the EXACT script_kind value that
+// must come back on the row. When the operator picks "mixed", the model
+// is free to choose any of the five concrete kinds.
+const STYLE_TO_KIND: Record<Exclude<ScriptStyle, "mixed">, GeneratedScript["script_kind"]> = {
+  problem_solution: "problem_solution",
+  testimonial: "testimonial",
+  listicle: "listicle",
+  founder_story: "founder_story",
+  before_after: "before_after",
+};
+
 function buildPrompt(input: GenerateInput): string {
   const p = input.product;
   const placementBlock = placementGuide(input.placement);
@@ -77,7 +88,46 @@ function buildPrompt(input: GenerateInput): string {
     .join("\n") || "(no pain breakdown on file)";
   const quotes = (p.consumer_quotes ?? []).map((q) => `- "${q}"`).join("\n") || "(no verbatim quotes on file)";
 
-  return `You are a senior direct-response copywriter for Meta ads (Facebook + Instagram, Feed + Reels + Stories). You will write ${input.count} distinct ad scripts for ONE product. Each script is a single CSV row in the 10-column schema below.
+  // Style commitment that appears at the very top — the FIRST thing the
+  // model reads after its role. When the operator picked a concrete style
+  // (not "mixed"), we name it explicitly and pin the JSON output's
+  // script_kind to that exact value.
+  const requestedKindLine =
+    input.style === "mixed"
+      ? `STYLE: variety pack (the model picks one of the 5 kinds per script). script_kind in the JSON output must be one of: problem_solution | testimonial | listicle | founder_story | before_after.`
+      : `STYLE: ${prettyStyle(input.style)} (REQUIRED). script_kind in the JSON output MUST be the exact string "${input.style}". Any other value is a violation.`;
+
+  const countNoun = input.count === 1 ? "1 ad script" : `${input.count} distinct ad scripts`;
+  const scriptNoun = input.count === 1 ? "This script" : `All ${input.count} scripts`;
+
+  // Build only the optional blocks that have content — empty competitor
+  // refs / notes / enrichment used to leave dead whitespace and dilute the
+  // model's attention.
+  const optionalBlocks: string[] = [];
+  if (input.competitor_refs && input.competitor_refs.trim()) {
+    optionalBlocks.push(
+      `COMPETITOR REFERENCES (swipe the STRUCTURE — hook beat, mid-beat, CTA shape — not the actual language)\n${input.competitor_refs.trim()}`
+    );
+  }
+  if (input.notes && input.notes.trim()) {
+    optionalBlocks.push(`OPERATOR NOTES (priority — lean into these explicitly)\n${input.notes.trim()}`);
+  }
+  if (input.enrichment) {
+    optionalBlocks.push(renderEnrichmentForPrompt(input.enrichment));
+  }
+  const optionalSection = optionalBlocks.length > 0 ? "\n" + optionalBlocks.join("\n\n") + "\n" : "";
+
+  return `You are a senior direct-response copywriter for Meta ads (Facebook + Instagram, Feed + Reels + Stories). You will write ${countNoun} for ONE product. Each script is a single CSV row in the 10-column schema below.
+
+╔═════════════════════════════════════════════════════════════════════════╗
+║  REQUESTED BRIEF (these three lines are LOAD-BEARING — obey them all)   ║
+╚═════════════════════════════════════════════════════════════════════════╝
+${requestedKindLine}
+PLACEMENT: ${prettyPlacement(input.placement)} — ${placementBlock}
+COUNT: ${input.count} script${input.count === 1 ? "" : "s"} total.
+
+STYLE — how every script in this batch must be structured
+${styleBlock}
 
 PRODUCT
 - Name: ${p.name}
@@ -97,31 +147,25 @@ ${pains}
 
 CONSUMER VOICE (verbatim — pull these phrases into hooks and body where they fit naturally)
 ${quotes}
-
-${input.competitor_refs ? `COMPETITOR REFERENCES (swipe structure, not language)\n${input.competitor_refs}\n` : ""}
-${input.notes ? `OPERATOR NOTES\n${input.notes}\n` : ""}
-${input.enrichment ? `\n${renderEnrichmentForPrompt(input.enrichment)}\n` : ""}
-
-PLACEMENT
-${placementBlock}
-
-STYLE BRIEF
-${styleBlock}
-
+${optionalSection}
 HARD RULES
 1. Write how real people talk. Flowing sentences with natural conjunctions ("and", "because", "so", "but"). Fragments only for emphasis, sparingly.
 2. NO medical claims. NO "cures", "treats", "heals", "FDA-approved". Use lifestyle language ("supports sleep", "helps you wind down").
 3. Every benefit named in the body MUST map to a specific ingredient or delivery tech listed above. No "20+ vitamins" hand-waving — name the actual compound.
 4. Editor Note column = practical editing techniques only ("quick zoom", "split screen", "freeze frame + text pop", "punch in"). NOT character motivation or emotional direction. Leave blank if no specific technique.
 5. Execution Type must be exactly one of: "Creator-Led", "Stock+B-Roll Only", "Creator + B-Roll". Be honest — not every script needs a creator on camera.
-6. Pull at least one verbatim phrase from the CONSUMER VOICE block above into at least one script. Not every script — at least one.
-7. Variants must be distinct: different hooks, different angles, different CTAs. No two scripts can share the same opening line or pain entry point.
-
+6. ${scriptNoun} MUST follow the STYLE structure above. If the script you draft drifts into a different format, rewrite it before returning.
+7. Pull at least one verbatim phrase from the CONSUMER VOICE block into at least one script.
+${input.count === 1 ? "" : `8. Variants must be distinct: different hooks, different angles, different CTAs. No two scripts can share the same opening line or pain entry point.\n`}
 OUTPUT FORMAT — strict JSON, no markdown fences, no commentary:
 {
   "scripts": [
     {
-      "script_kind": "problem_solution" | "testimonial" | "listicle" | "founder_story" | "before_after",
+      "script_kind": ${
+        input.style === "mixed"
+          ? '"problem_solution" | "testimonial" | "listicle" | "founder_story" | "before_after"'
+          : `"${input.style}"  // MUST be this exact value`
+      },
       "source_ref": null,
       "csv": {
         "Section #": "1",
@@ -139,38 +183,77 @@ OUTPUT FORMAT — strict JSON, no markdown fences, no commentary:
   ]
 }
 
-Output exactly ${input.count} scripts.`;
+Output exactly ${input.count} script${input.count === 1 ? "" : "s"}.`;
+}
+
+function prettyStyle(s: ScriptStyle): string {
+  return {
+    problem_solution: "Problem → Solution",
+    testimonial: "Testimonial",
+    listicle: "Listicle (N-reason format)",
+    founder_story: "Founder story",
+    before_after: "Before → After",
+    mixed: "Variety pack",
+  }[s];
+}
+
+function prettyPlacement(p: Placement): string {
+  return { feed: "Feed", reels: "Reels", stories: "Stories", mixed: "Mixed Feed + Reels" }[p];
 }
 
 function placementGuide(p: Placement): string {
   switch (p) {
     case "feed":
-      return "Feed (4:5 or 1:1). Static / short-form. CTA in the first 3 seconds AND on-screen text. Sound off by default — every claim has to land via captions too.";
+      return "4:5 or 1:1 static / short-form. Hook + CTA visible in the first 3 seconds AND in on-screen text. Sound off by default — every claim has to land via captions too.";
     case "reels":
-      return "Reels (9:16). Vertical video, sound-on, fast cuts. Hook MUST land in the first 1.5 seconds or viewers swipe away. Subtitles + on-screen text. Native, not polished.";
+      return "9:16 vertical video, sound-on, fast cuts. Hook MUST land in the first 1.5 seconds or viewers swipe away. Subtitles + on-screen text. Native, not polished.";
     case "stories":
-      return "Stories (9:16). Vertical, sound-optional. Single-screen takeover style. Punchy. Swipe-up CTA on the last section.";
+      return "9:16 vertical, sound-optional. Single-screen takeover style. Punchy. Swipe-up CTA on the last section.";
     case "mixed":
     default:
-      return "Mixed Feed + Reels. Default to 9:16 vertical so the same asset can crop to Feed 4:5. Sound-on Reels-first but every script must work on mute.";
+      return "Default to 9:16 vertical so the same asset can crop to Feed 4:5. Sound-on Reels-first but every claim must also land on mute.";
   }
 }
 
 function styleGuide(s: ScriptStyle, count: number): string {
+  const lead = count === 1 ? "This script" : `All ${count} scripts`;
   switch (s) {
     case "problem_solution":
-      return `All ${count} scripts follow Problem → Agitation → Solution → Proof → CTA. Lead with a specific pain ripped from the consumer voice block.`;
+      return `${lead} MUST follow the structure: Problem → Agitation → Solution → Proof → CTA.
+- Hook (0-3s): name a specific pain ripped from the CONSUMER VOICE block, verbatim if possible.
+- Agitation (3-6s): make the pain visceral — describe the moment it hurts most.
+- Solution (6-12s): introduce the product, name the 2-3 specific ingredients that address THAT exact pain.
+- Proof (12-18s): one concrete proof point (ingredient form, delivery tech, or a verbatim consumer quote).
+- CTA (18-25s): hard ask. "Tap shop now", "grab yours before stock runs out", etc.`;
     case "testimonial":
-      return `All ${count} scripts are testimonial-format: real-feeling first-person voice ("I used to..., then I tried..., now I..."). Use the verbatim consumer quotes as DNA for the speech rhythm.`;
+      return `${lead} MUST follow first-person testimonial framing:
+- Opener: "I used to [PAIN, verbatim from consumer voice block]…"
+- Discovery: "then I tried [PRODUCT]…"
+- Result: "now I [SPECIFIC outcome tied to an ingredient]…"
+- CTA: soft + personal — "you have to try it", "link in bio", etc.
+Use verbatim consumer quotes as the DNA for sentence rhythm. The voice must feel like one person talking, not advertising.`;
     case "listicle":
-      return `All ${count} scripts use a "3 reasons why" or "5 things I wish I knew" frame. Pull the 3-5 highest-GMV pain points and address each as a list item with a specific ingredient as the answer.`;
+      return `${lead} MUST use a numbered-list frame: "3 reasons why I switched to [product]" OR "5 things I wish I'd known about [pain category]".
+- Pull the 3-5 highest-GMV pain points from the PAIN POINTS block as the list items.
+- Each item names ONE specific ingredient or delivery tech as the answer.
+- Closer: tie it back to the product + CTA.`;
     case "founder_story":
-      return `All ${count} scripts use founder-origin framing: "I built this because I had X problem and nothing worked." Restrained, conversational, low production value vibe.`;
+      return `${lead} MUST use founder-origin framing:
+- Opener: "I built [PRODUCT] because [SPECIFIC PERSONAL PAIN]…"
+- Discovery: what existing options failed at — name 1-2 things specifically (other supplement formats, doctor visits, etc.).
+- Build: "so I formulated…" + name the actual ingredients in the product page.
+- Close: low-pressure, conversational CTA. "If you struggle with X, here's the link."
+Restrained, conversational, low production value vibe. NOT polished ad copy.`;
     case "before_after":
-      return `All ${count} scripts open with a stark before state (use the pain language verbatim), pivot at the midpoint to the after state, and close with the bridge (the product). The pivot must feel earned, not abrupt.`;
+      return `${lead} MUST follow a sharp before → after pivot:
+- Opener (0-4s): paint the BEFORE state in concrete sensory detail. Pull pain language verbatim from consumer voice.
+- Pivot (4-6s): the moment something changed — be specific about what (started taking the product, hit X weeks, etc.).
+- After (6-15s): the AFTER state, in equally concrete detail. Tie at least one improvement to a specific ingredient.
+- CTA (15-25s): "if your before sounds like mine, here's what worked."
+The pivot must feel earned — not magic.`;
     case "mixed":
     default:
-      return `Generate a variety pack across the 5 styles below. Distribute roughly evenly across ${count} scripts:
+      return `Variety pack across all 5 kinds. ${count === 1 ? "Pick ONE kind and commit to it." : `Distribute roughly evenly across ${count} scripts`}:
 - problem_solution: Problem → Agitation → Solution → Proof → CTA
 - testimonial: first-person "I used to / then I / now I"
 - listicle: "3 reasons" or "5 things" format
@@ -221,13 +304,25 @@ export async function generateScripts(input: GenerateInput): Promise<GeneratedSc
   }
 
   const rows: any[] = Array.isArray(parsed?.scripts) ? parsed.scripts : [];
-  return rows.map((r) => ({
-    script_kind: (r.script_kind ?? "problem_solution") as GeneratedScript["script_kind"],
-    style: input.style,
-    placement: input.placement,
-    source_ref: r.source_ref ?? null,
-    csv: normalizeCsvRow(r.csv ?? {}),
-  }));
+  return rows.map((r) => {
+    // When the operator picked a concrete style, force script_kind to that
+    // exact value. If Gemini drifted (e.g. wrote a testimonial when we asked
+    // for problem_solution), the requested kind is the source of truth — we
+    // don't want the persisted row claiming to be something the operator
+    // didn't ask for.
+    const requestedKind =
+      input.style === "mixed" ? null : STYLE_TO_KIND[input.style];
+    const modelKind = (r.script_kind ?? "problem_solution") as GeneratedScript["script_kind"];
+    const finalKind = requestedKind ?? modelKind;
+
+    return {
+      script_kind: finalKind,
+      style: input.style,
+      placement: input.placement,
+      source_ref: r.source_ref ?? null,
+      csv: normalizeCsvRow(r.csv ?? {}),
+    };
+  });
 }
 
 function normalizeCsvRow(r: Record<string, any>): CsvRow {

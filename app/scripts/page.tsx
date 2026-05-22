@@ -166,12 +166,34 @@ export default function ScriptsPage() {
     }
     setLastEnrichment(data?.enrichment ?? null);
     const e = data?.enrichment;
-    const enrichSummary = e
-      ? `Enriched by Connoisseur (${e.counts.voice_atoms} voice atoms, ${e.counts.selling_points} selling points, ${e.counts.compliance_gates} gates)`
-      : enrichWithConnoisseur
-        ? `Saved to ${selectedProduct?.name} (Connoisseur enrichment skipped — MCP empty or unreachable)`
-        : `Saved to ${selectedProduct?.name} (Connoisseur disabled)`;
-    toast.success(`Generated ${data?.count ?? 0} scripts`, enrichSummary);
+    const r = data?.requested;
+    // Compose the toast in priority order: requested style/placement first
+    // (so the operator can verify their inputs landed), then enrichment.
+    const parts: string[] = [];
+    if (r) {
+      const styleLabel = r.style === "mixed" ? "variety pack" : r.style.replace(/_/g, " ");
+      parts.push(`${styleLabel} · ${r.placement}`);
+      if (!r.style_matches) parts.push("⚠️ style mismatch — model drifted");
+      if (r.has_competitor_refs) parts.push("competitor refs ✓");
+      if (r.has_notes) parts.push("notes ✓");
+      const sig = r.product_signal;
+      if (sig) {
+        const grounded = [
+          sig.pain_points > 0 && `${sig.pain_points} pain pts`,
+          sig.consumer_quotes > 0 && `${sig.consumer_quotes} quotes`,
+          sig.key_ingredients > 0 && `${sig.key_ingredients} ingredients`,
+        ].filter(Boolean).join(" / ");
+        if (grounded) parts.push(grounded);
+      }
+    }
+    if (e) {
+      parts.push(`Connoisseur: ${e.counts.voice_atoms} voice atoms, ${e.counts.selling_points} selling points, ${e.counts.compliance_gates} gates`);
+    } else if (enrichWithConnoisseur) {
+      parts.push("Connoisseur skipped (MCP empty / unreachable)");
+    } else {
+      parts.push("Connoisseur disabled");
+    }
+    toast.success(`Generated ${data?.count ?? 0} script${data?.count === 1 ? "" : "s"}`, parts.join(" · "));
     // Refresh the list.
     fetch(`/api/scripts?product_id=${encodeURIComponent(selectedProductId)}`, { cache: "no-store" })
       .then((r) => r.json())

@@ -95,10 +95,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Sanity diagnostic — what we actually fed into the model. Lets the UI
+    // verify the operator's chosen style + placement + supporting fields
+    // actually made it through to the prompt instead of being silently
+    // discarded. Surfaces in the success toast.
+    const requested = {
+      style,
+      placement,
+      count: saved.length,
+      style_matches: saved.every((s) => style === "mixed" || s.script_kind === style),
+      has_competitor_refs: Boolean(competitor_refs && competitor_refs.trim()),
+      has_notes: Boolean(notes && notes.trim()),
+      product_signal: {
+        pain_points: (product.pain_breakdown ?? []).length,
+        consumer_quotes: (product.consumer_quotes ?? []).length,
+        key_ingredients: (product.key_ingredients ?? []).length,
+      },
+    };
+
     return NextResponse.json({
       count: saved.length,
       batch_id,
       scripts: saved,
+      requested,
       enrichment: enrichment
         ? {
             brand_slug: enrichment.brand_slug,
