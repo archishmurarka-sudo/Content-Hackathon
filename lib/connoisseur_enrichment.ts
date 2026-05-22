@@ -53,22 +53,39 @@ export type ScriptEnrichment = {
   tool_status: Record<string, "ok" | "empty" | "error">;
 };
 
-// AshwaMag is the canonical Connoisseur brand. RootLabs sister-products map
-// onto it for now (same corpus); add overrides here as more brands onboard.
-const BRAND_SLUG_MAP: Record<string, string> = {
+// Map a product to its corpus slug. ONLY products that actually have a
+// corpus on the MCP get a slug — everything else returns null so the caller
+// can decide to skip enrichment (rather than silently borrowing AshwaMag's
+// sleep/cortisol voice atoms for, e.g., a hair product).
+//
+// Keyed by product.id first (most specific), then by brand/name fallback so
+// user-added products with the same identity still map correctly.
+const PRODUCT_ID_TO_BRAND_SLUG: Record<string, string> = {
+  // Built-in products from lib/data.ts
+  ashwamag: "ashwamag",          // Mag Ashwa Gummies — has corpus
+  // alpha (Alpha Shilajit) and hgr (HGR Hair) intentionally OMITTED — no
+  // corpus on the MCP, would only contaminate the prompt.
+};
+const NAME_HINT_TO_BRAND_SLUG: Record<string, string> = {
   "ashwamag": "ashwamag",
   "mag ashwa": "ashwamag",
   "magashwa": "ashwamag",
-  "rootlabs": "ashwamag",
-  "root labs": "ashwamag",
+  "mag ashwa gummies": "ashwamag",
 };
 
-export function brandSlugForProduct(product: Pick<Product, "brand" | "name">): string {
+export function brandSlugForProduct(product: Pick<Product, "id" | "brand" | "name">): string | null {
+  if (product.id && PRODUCT_ID_TO_BRAND_SLUG[product.id]) return PRODUCT_ID_TO_BRAND_SLUG[product.id];
   const candidates = [product.brand, product.name].filter(Boolean).map((s) => String(s).toLowerCase().trim());
   for (const c of candidates) {
-    if (BRAND_SLUG_MAP[c]) return BRAND_SLUG_MAP[c];
+    if (NAME_HINT_TO_BRAND_SLUG[c]) return NAME_HINT_TO_BRAND_SLUG[c];
   }
-  return "ashwamag";
+  return null;
+}
+
+// Convenience: true when the product has a Connoisseur corpus mapped to it.
+// Used by API routes to decide whether to attempt the MCP fetch at all.
+export function productHasCorpus(product: Pick<Product, "id" | "brand" | "name">): boolean {
+  return brandSlugForProduct(product) !== null;
 }
 
 // Run a single tool with both possible arg shapes, swallow errors, normalize
@@ -98,11 +115,51 @@ async function safeCallList(toolName: string, args: Record<string, any>, status:
   }
 }
 
-export async function fetchScriptEnrichment(product: Product, opts?: { limit?: number; brand_slug_override?: string }): Promise<ScriptEnrichment> {
+// Empty bundle helper — used when a product has no corpus mapped, so the
+// caller can still get a typed-shape back instead of having to check for null.
+function emptyEnrichmentBundle(brandSlug: string | null): ScriptEnrichment {
+  return {
+    brand_slug: brandSlug ?? "(no corpus)",
+    voice_atoms: [],
+    selling_points: [],
+    winner_combos: [],
+    compliance_gates: [],
+    archetype_performance: [],
+    tool_status: { no_corpus_mapped: "empty" },
+  };
+}
+
+// In-process TTL cache for Connoisseur enrichment. Each (brand_slug, limit)
+// pair produces 5 parallel MCP calls per fetch — without this, every brief
+// regen re-pays that round-trip + blocks Gemini latency. 5 minutes absorbs
+// burst clicks (operator regenerates a storyboard 3x in a minute) while
+// staying fresh enough that new corpus pushes appear within one workday.
+// Pass `forceRefresh: true` to bust the cache (e.g. after a corpus update).
+type EnrichmentCacheEntry = { value: ScriptEnrichment; expires_at: number };
+const ENRICHMENT_TTL_MS = 5 * 60 * 1000;
+const enrichmentCache = new Map<string, EnrichmentCacheEntry>();
+
+export function clearEnrichmentCache() {
+  enrichmentCache.clear();
+}
+
+export async function fetchScriptEnrichment(product: Product, opts?: { limit?: number; brand_slug_override?: string; forceRefresh?: boolean }): Promise<ScriptEnrichment> {
   // When the caller knows the exact corpus slug (e.g. /api/connoisseur/preview
-  // for an arbitrary brand), let them bypass the product-name mapper.
+  // for an arbitrary brand), let them bypass the product-name mapper. Otherwise
+  // resolve from the product; if it doesn't map to any corpus, return an empty
+  // bundle rather than silently borrowing AshwaMag's data for another SKU.
   const slug = opts?.brand_slug_override?.trim() || brandSlugForProduct(product);
+  if (!slug) return emptyEnrichmentBundle(null);
   const limit = opts?.limit ?? 20;
+
+  const cacheKey = `${slug}::${limit}`;
+  if (!opts?.forceRefresh) {
+    const hit = enrichmentCache.get(cacheKey);
+    if (hit && hit.expires_at > Date.now()) {
+      return hit.value;
+    }
+  }
+
   const status: Record<string, "ok" | "empty" | "error"> = {};
 
   const [voiceRaw, sellingRaw, winnersRaw, gatesRaw, archetypeRaw] = await Promise.all([
@@ -113,7 +170,7 @@ export async function fetchScriptEnrichment(product: Product, opts?: { limit?: n
     safeCallList("get_archetype_performance", { brand_slug: slug }, status),
   ]);
 
-  return {
+  const result: ScriptEnrichment = {
     brand_slug: slug,
     voice_atoms: voiceRaw
       .filter((r) => r?.approved !== false)
@@ -162,7 +219,7 @@ export async function resolveEnrichmentFromBody(product: Product, body: any): Pr
   const override = body?.enrichment_override;
   if (override && typeof override === "object" && Array.isArray(override.voice_atoms)) {
     return {
-      brand_slug: String(override.brand_slug ?? brandSlugForProduct(product)),
+      brand_slug: String(override.brand_slug ?? brandSlugForProduct(product) ?? "(operator-picked)"),
       voice_atoms: Array.isArray(override.voice_atoms) ? override.voice_atoms : [],
       selling_points: Array.isArray(override.selling_points) ? override.selling_points : [],
       winner_combos: Array.isArray(override.winner_combos) ? override.winner_combos : [],

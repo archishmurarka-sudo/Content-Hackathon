@@ -91,29 +91,16 @@ export function ConnoisseurPanel({ open, onClose, initialBrandSlug = "ashwamag",
       .catch(() => {});
   }, [open, brands.length]);
 
-  // 2) Once brands land, seed the selection with ALL of them (default-on).
-  //    If the brand list comes back empty, fall back to the initial slug so
-  //    the panel still works.
+  // 2) Once the panel opens, seed the selection with ONLY the product's own
+  //    brand. Defaulting to "all 27 brands" was a UX trap — it ballooned the
+  //    Gemini prompt and risked cross-contaminating an AshwaMag script with
+  //    competitor selling-point language. Operator can still tick additional
+  //    brands deliberately for cross-brand inspiration.
   useEffect(() => {
-    if (seededRef.current) return;
-    if (brands.length === 0) return;
+    if (!open || seededRef.current) return;
     seededRef.current = true;
-    setSelectedBrands(new Set(brands.map((b) => b.brand_slug)));
-  }, [brands]);
-
-  // Also handle the empty-brands case: if MCP didn't return any brands,
-  // seed with the initial slug so the operator can still preview.
-  useEffect(() => {
-    if (!open) return;
-    if (seededRef.current) return;
-    if (brands.length > 0) return;
-    const t = setTimeout(() => {
-      if (seededRef.current) return;
-      seededRef.current = true;
-      setSelectedBrands(new Set([initialBrandSlug]));
-    }, 1500);
-    return () => clearTimeout(t);
-  }, [open, brands.length, initialBrandSlug]);
+    setSelectedBrands(new Set([initialBrandSlug]));
+  }, [open, initialBrandSlug]);
 
   // 3) Whenever the selected-brand set changes, fetch any missing previews
   //    in parallel + rebuild the merged bundle from cache.

@@ -133,11 +133,11 @@ export async function POST(req: NextRequest) {
     void (async () => {
       const scriptText = sb.shots.map((s) => s.speech).filter(Boolean).join(" ");
       const sellingUsed = enrichment?.selling_points.slice(0, 8).map((s) => s.point) ?? [];
-      const psc = await preShipCheck({ brand_slug: brandSlugForProduct(product), script_text: scriptText, selling_points_used: sellingUsed });
+      const psc = await preShipCheck({ brand_slug: brandSlugForProduct(product) ?? "ashwamag", script_text: scriptText, selling_points_used: sellingUsed });
       void logEvent({
         type: "brief.pre_ship_check",
         brief_id: brief.id,
-        payload: { creator_handle: creator.handle, product_id, brand_slug: brandSlugForProduct(product), tool_ok: psc.ok },
+        payload: { creator_handle: creator.handle, product_id, brand_slug: brandSlugForProduct(product) ?? null, tool_ok: psc.ok },
         outcome: { passed: psc.passed, flag_count: psc.flags.length, flags: psc.flags.slice(0, 20) },
       });
     })().catch(() => {});
