@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/toast";
+import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 
 type Shot = {
   idx: number;
@@ -123,6 +124,15 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
   // Railway service blocks anything else from receiving.
   const TEST_PHONE = "918017920654";
 
+  // Connoisseur enrichment toggle for the Regenerate-script button. Default
+  // ON — mirrors the home-page brief generator and the Scripts/Instagram
+  // pages so the operator sees the same default everywhere.
+  const [enrichWithConnoisseur, setEnrichWithConnoisseur] = useState(true);
+  const [lastRegenEnrichment, setLastRegenEnrichment] = useState<{
+    brand_slug: string;
+    counts: { voice_atoms: number; selling_points: number; winner_combos: number; compliance_gates: number; archetype_performance: number };
+  } | null>(null);
+
   async function load() {
     const res = await fetch(`/api/briefs/${id}`, { cache: "no-store" });
     if (!res.ok) return;
@@ -182,8 +192,14 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
 
   async function regenStoryboard() {
     setRegenerating(true);
-    await fetch(`/api/briefs/${id}/regenerate`, { method: "POST" });
+    const res = await fetch(`/api/briefs/${id}/regenerate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enrich_with_connoisseur: enrichWithConnoisseur }),
+    });
     setRegenerating(false);
+    const data = await res.json().catch(() => ({}));
+    setLastRegenEnrichment(data?.enrichment ?? null);
     load();
   }
 
@@ -350,7 +366,16 @@ export default function BriefDetail({ params }: { params: Promise<{ id: string }
             <span className={`badge badge-${brief.status}`}>{brief.status.replace(/_/g, " ")}</span>
           </div>
         </div>
-        <div className="row">
+        <div className="row" style={{ alignItems: "center" }}>
+          <ConnoisseurToggle
+            enabled={enrichWithConnoisseur}
+            onChange={setEnrichWithConnoisseur}
+            lastSummary={
+              lastRegenEnrichment
+                ? `${lastRegenEnrichment.counts.voice_atoms} voice atoms · ${lastRegenEnrichment.counts.selling_points} selling points · ${lastRegenEnrichment.counts.compliance_gates} gates`
+                : null
+            }
+          />
           <button className="btn-ghost" onClick={regenStoryboard} disabled={regenerating || brief.status === "generating_storyboard"}>
             {regenerating ? "Regenerating…" : "Regenerate script"}
           </button>
