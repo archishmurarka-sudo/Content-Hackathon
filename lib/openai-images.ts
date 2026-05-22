@@ -241,6 +241,7 @@ export function buildPromptForKeyframe(args: {
   product_format?: string | null;
   product_one_liner?: string;
   placement?: string | null;
+  hero_image_url?: string | null;
 }): string {
   const placement = (args.placement ?? "mixed").toLowerCase();
   const isPortrait = placement !== "feed";
@@ -249,12 +250,21 @@ export function buildPromptForKeyframe(args: {
     ? "Aesthetic: vertical 9:16 Meta Reels / Stories keyframe. UGC-style, handheld, natural daylight or warm interior. Subject and product clearly visible. Not a polished studio ad."
     : "Aesthetic: clean, mobile-first Meta Feed keyframe. Square 1:1 composition, high contrast, sound-off-friendly. Real-feeling, not stock.";
 
+  const referenceLock = args.hero_image_url
+    ? [
+        "PRODUCT REFERENCE LOCK",
+        "A reference image of the EXACT product is supplied with this request. The bottle / pouch / packaging / label / colors in your output MUST match the reference identically. Do NOT redesign the label. Do NOT change the bottle shape or color. Compose the scene AROUND the supplied product.",
+        "",
+      ]
+    : [];
+
   const lines = [
     aestheticBlock,
     "",
     `PRODUCT: ${args.product_name} by ${args.product_brand}${args.product_format ? ` (${args.product_format})` : ""}.`,
     args.product_one_liner ? `WHAT IT IS: ${args.product_one_liner}` : "",
     "",
+    ...referenceLock,
     `KEYFRAME ${args.beat.idx + 1} of ${args.total_beats} — moment ${args.beat.timestamp_s}s of ${args.total_duration_s}s`,
     args.beat.voiceover ? `LINE BEING SPOKEN: "${args.beat.voiceover}"` : "(silent / ambient beat)",
     "",
@@ -283,9 +293,9 @@ export function buildPromptForAdScript(args: {
   product_format?: string | null;
   product_one_liner?: string;
   placement?: string | null;        // "feed" | "reels" | "stories" | "mixed"
-  hero_image_url?: string | null;   // currently informational only; gpt-image-1
-                                    // text-to-image doesn't take refs. Future
-                                    // upgrade: switch to /images/edits.
+  hero_image_url?: string | null;   // When present, the caller routes via
+                                    // /images/edits with this as the reference
+                                    // — prompt below acknowledges the lock.
 }): { prompt: string; aspect: ImageAspect } {
   const csv = args.script_csv;
   const hook = (csv["Building Block"] ?? "").trim();
@@ -302,12 +312,21 @@ export function buildPromptForAdScript(args: {
       ? "Aesthetic: clean, mobile-first Meta Feed ad. High contrast, sound-off-friendly — the hook must read at a glance. Real-feeling, not stock. Avoid heavy retouching."
       : "Aesthetic: vertical 9:16 Meta Reels / Stories first-frame. UGC-style, handheld, natural daylight or warm interior. Subject and product clearly visible. Not a polished studio ad.";
 
+  const referenceLock = args.hero_image_url
+    ? [
+        "PRODUCT REFERENCE LOCK",
+        "A reference image of the EXACT product is supplied with this request. The bottle / pouch / packaging / label / colors in your output MUST match the reference identically. Do NOT redesign the label. Do NOT change the bottle shape or color. Compose the scene AROUND the supplied product.",
+        "",
+      ]
+    : [];
+
   const lines = [
     aestheticBlock,
     "",
     `PRODUCT: ${args.product_name} by ${args.product_brand}${args.product_format ? ` (${args.product_format})` : ""}.`,
     args.product_one_liner ? `WHAT IT IS: ${args.product_one_liner}` : "",
     "",
+    ...referenceLock,
     "SCENE",
     visualRef || voiceover || hook || "Hero product shot on a kitchen counter, morning light.",
     "",

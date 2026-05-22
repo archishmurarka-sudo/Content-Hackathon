@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
             aspect,
             quality: "medium",
             prefix: `scripts/${s.id}/images`,
+            reference_image_url: product.hero_image_url ?? null,
           });
           await setScriptImage(s.id, {
             image_status: "ready",

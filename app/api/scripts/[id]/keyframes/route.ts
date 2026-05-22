@@ -88,6 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           product_format: product.format,
           product_one_liner: product.one_liner,
           placement: script.placement,
+          hero_image_url: product.hero_image_url ?? null,
         });
         try {
           const img = await generateAdImage({
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             aspect: script.placement === "feed" ? "square" : "portrait",
             quality: "medium",
             prefix: `scripts/${id}/keyframes/${b.idx}`,
+            reference_image_url: product.hero_image_url ?? null,
           });
           results[b.idx] = {
             ...results[b.idx],

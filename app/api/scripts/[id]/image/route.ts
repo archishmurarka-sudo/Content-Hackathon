@@ -48,6 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       aspect,
       quality: "medium",
       prefix: `scripts/${id}/images`,
+      reference_image_url: product.hero_image_url ?? null,
     });
     const updated = await setScriptImage(id, {
       image_status: "ready",
