@@ -19,6 +19,9 @@ export type Avatar = {
   face_image_urls: string[];
   voice_id: string | null;
   voice_provider: string | null;
+  // R2 URL of an uploaded voice sample (mp3/wav/m4a). Fed to ElevenLabs
+  // voice-cloning when the audio pipeline lands; for now just persisted.
+  voice_sample_url: string | null;
   notes: string | null;
   created_at: number;
   updated_at: number;
@@ -39,6 +42,7 @@ export type CreateAvatarInput = {
   face_image_urls?: string[];
   voice_id?: string | null;
   voice_provider?: string | null;
+  voice_sample_url?: string | null;
   notes?: string | null;
 };
 
@@ -52,6 +56,7 @@ export async function createAvatar(input: CreateAvatarInput): Promise<Avatar> {
     face_image_urls: input.face_image_urls ?? [],
     voice_id: input.voice_id ?? null,
     voice_provider: input.voice_provider ?? null,
+    voice_sample_url: input.voice_sample_url ?? null,
     notes: input.notes ?? null,
     created_at: now,
     updated_at: now,
@@ -61,8 +66,8 @@ export async function createAvatar(input: CreateAvatarInput): Promise<Avatar> {
     await ensureSchema();
     const s = sql();
     await s`
-      INSERT INTO avatars (id, name, brand_slug, persona, face_image_urls, voice_id, voice_provider, notes, created_at, updated_at)
-      VALUES (${row.id}, ${row.name}, ${row.brand_slug}, ${s.json(row.persona as any)}, ${s.json(row.face_image_urls as any)}, ${row.voice_id}, ${row.voice_provider}, ${row.notes}, ${row.created_at}, ${row.updated_at})
+      INSERT INTO avatars (id, name, brand_slug, persona, face_image_urls, voice_id, voice_provider, voice_sample_url, notes, created_at, updated_at)
+      VALUES (${row.id}, ${row.name}, ${row.brand_slug}, ${s.json(row.persona as any)}, ${s.json(row.face_image_urls as any)}, ${row.voice_id}, ${row.voice_provider}, ${row.voice_sample_url}, ${row.notes}, ${row.created_at}, ${row.updated_at})
     `;
     return row;
   }
@@ -110,6 +115,7 @@ export async function updateAvatar(id: string, patch: UpdateAvatarInput): Promis
     ...(patch.face_image_urls !== undefined ? { face_image_urls: patch.face_image_urls } : {}),
     ...(patch.voice_id !== undefined ? { voice_id: patch.voice_id } : {}),
     ...(patch.voice_provider !== undefined ? { voice_provider: patch.voice_provider } : {}),
+    ...(patch.voice_sample_url !== undefined ? { voice_sample_url: patch.voice_sample_url } : {}),
     ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
     updated_at: Date.now(),
   };
@@ -118,14 +124,15 @@ export async function updateAvatar(id: string, patch: UpdateAvatarInput): Promis
     const s = sql();
     await s`
       UPDATE avatars SET
-        name            = ${next.name},
-        brand_slug      = ${next.brand_slug},
-        persona         = ${s.json(next.persona as any)},
-        face_image_urls = ${s.json(next.face_image_urls as any)},
-        voice_id        = ${next.voice_id},
-        voice_provider  = ${next.voice_provider},
-        notes           = ${next.notes},
-        updated_at      = ${next.updated_at}
+        name             = ${next.name},
+        brand_slug       = ${next.brand_slug},
+        persona          = ${s.json(next.persona as any)},
+        face_image_urls  = ${s.json(next.face_image_urls as any)},
+        voice_id         = ${next.voice_id},
+        voice_provider   = ${next.voice_provider},
+        voice_sample_url = ${next.voice_sample_url},
+        notes            = ${next.notes},
+        updated_at       = ${next.updated_at}
       WHERE id = ${id}
     `;
     return next;
@@ -161,6 +168,7 @@ function rowToAvatar(r: any): Avatar {
     face_image_urls: Array.isArray(r.face_image_urls) ? r.face_image_urls : [],
     voice_id: r.voice_id ?? null,
     voice_provider: r.voice_provider ?? null,
+    voice_sample_url: r.voice_sample_url ?? null,
     notes: r.notes ?? null,
     created_at: Number(r.created_at),
     updated_at: Number(r.updated_at),

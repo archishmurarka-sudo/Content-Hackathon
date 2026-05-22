@@ -31,6 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if ("brand_slug" in body) patch.brand_slug = body.brand_slug ? String(body.brand_slug).trim() : null;
   if ("voice_id" in body) patch.voice_id = body.voice_id ? String(body.voice_id).trim() : null;
   if ("voice_provider" in body) patch.voice_provider = body.voice_provider ? String(body.voice_provider).trim() : null;
+  if ("voice_sample_url" in body) patch.voice_sample_url = body.voice_sample_url ? String(body.voice_sample_url).trim() : null;
   if ("notes" in body) patch.notes = body.notes != null ? String(body.notes) : null;
   if ("face_image_urls" in body) patch.face_image_urls = Array.isArray(body.face_image_urls) ? body.face_image_urls.map(String) : [];
 

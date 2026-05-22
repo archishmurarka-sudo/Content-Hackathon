@@ -202,6 +202,8 @@ export async function ensureSchema(): Promise<void> {
     `;
     await s`CREATE INDEX IF NOT EXISTS avatars_brand_idx ON avatars (brand_slug, created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS avatars_created_at_idx ON avatars (created_at DESC);`;
+    // Voice sample (mp3/wav/m4a) for future ElevenLabs voice-cloning. R2 URL.
+    await s`ALTER TABLE avatars ADD COLUMN IF NOT EXISTS voice_sample_url TEXT;`;
   })();
   return g.__schemaReady;
 }

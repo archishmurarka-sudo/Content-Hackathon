@@ -30,6 +30,7 @@ type Avatar = {
   face_image_urls: string[];
   voice_id: string | null;
   voice_provider: string | null;
+  voice_sample_url: string | null;
   notes: string | null;
   created_at: number;
   updated_at: number;
@@ -69,12 +70,15 @@ export default function AvatarsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [draftUploading, setDraftUploading] = useState<"face" | "voice" | null>(null);
   const [draft, setDraft] = useState<{
     name: string;
     brand_slug: string;
     persona: Persona;
     voice_id: string;
     voice_provider: string;
+    voice_sample_url: string;
+    face_image_urls: string[];
     notes: string;
   }>({
     name: "",
@@ -82,6 +86,8 @@ export default function AvatarsPage() {
     persona: { ...DEFAULT_PERSONA },
     voice_id: "",
     voice_provider: "elevenlabs",
+    voice_sample_url: "",
+    face_image_urls: [],
     notes: "",
   });
 
@@ -96,6 +102,38 @@ export default function AvatarsPage() {
     });
   }, []);
 
+  async function uploadDraftFace(file: File) {
+    setDraftUploading("face");
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("prefix", "avatars/_draft/face");
+    const res = await fetch("/api/uploads/media", { method: "POST", body: fd });
+    setDraftUploading(null);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast.error("Upload failed", d?.error ?? `HTTP ${res.status}`);
+      return;
+    }
+    const { url } = await res.json();
+    setDraft((d) => ({ ...d, face_image_urls: [...d.face_image_urls, url] }));
+  }
+
+  async function uploadDraftVoice(file: File) {
+    setDraftUploading("voice");
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("prefix", "avatars/_draft/voice");
+    const res = await fetch("/api/uploads/media", { method: "POST", body: fd });
+    setDraftUploading(null);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      toast.error("Upload failed", d?.error ?? `HTTP ${res.status}`);
+      return;
+    }
+    const { url } = await res.json();
+    setDraft((d) => ({ ...d, voice_sample_url: url }));
+  }
+
   async function createAvatar() {
     if (!draft.name.trim()) {
       toast.error("Name required", "Give your avatar a name (e.g., \"Rachel — perimenopause real-talker\")");
@@ -109,8 +147,10 @@ export default function AvatarsPage() {
         name: draft.name.trim(),
         brand_slug: draft.brand_slug.trim() || null,
         persona: draft.persona,
+        face_image_urls: draft.face_image_urls,
         voice_id: draft.voice_id.trim() || null,
         voice_provider: draft.voice_provider.trim() || null,
+        voice_sample_url: draft.voice_sample_url.trim() || null,
         notes: draft.notes.trim() || null,
       }),
     });
@@ -128,6 +168,8 @@ export default function AvatarsPage() {
       persona: { ...DEFAULT_PERSONA },
       voice_id: "",
       voice_provider: "elevenlabs",
+      voice_sample_url: "",
+      face_image_urls: [],
       notes: "",
     });
   }
@@ -202,6 +244,53 @@ export default function AvatarsPage() {
           ))}
         </div>
 
+        <h3 style={{ marginTop: 18, marginBottom: 8, fontSize: 14 }}>Face references</h3>
+        <p className="muted-sm" style={{ marginBottom: 10, fontSize: 11 }}>
+          Upload 1–3 photos of the protagonist's face. These get passed to gpt-image-2 alongside the product photo so keyframes ground against the actual person instead of inventing one.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+          <label
+            className="btn-ghost btn-sm"
+            style={{ fontSize: 11, padding: "5px 12px", display: "inline-flex", alignItems: "center", gap: 4, cursor: draftUploading === "face" ? "wait" : "pointer" }}
+          >
+            <Upload size={11} /> {draftUploading === "face" ? "Uploading…" : "Add face photo"}
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              disabled={draftUploading !== null}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadDraftFace(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {draft.face_image_urls.length > 0 && (
+            <span className="muted-sm" style={{ fontSize: 11 }}>{draft.face_image_urls.length} attached</span>
+          )}
+        </div>
+        {draft.face_image_urls.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+            {draft.face_image_urls.map((url) => (
+              <div key={url} style={{ position: "relative", width: 64, height: 64, borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)" }}>
+                <img src={url} alt="face" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <button
+                  onClick={() => setDraft((d) => ({ ...d, face_image_urls: d.face_image_urls.filter((u) => u !== url) }))}
+                  title="Remove"
+                  style={{
+                    position: "absolute", top: 2, right: 2, padding: 2, background: "rgba(0,0,0,0.6)",
+                    color: "#fff", border: "none", borderRadius: 3, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <h3 style={{ marginTop: 18, marginBottom: 8, fontSize: 14 }}>Voice (TTS)</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div>
@@ -226,6 +315,43 @@ export default function AvatarsPage() {
               placeholder="e.g. ElevenLabs voice_id"
               style={{ width: "100%" }}
             />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14, padding: 10, background: "var(--surface-2)", borderRadius: 6 }}>
+          <label className="muted-sm" style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 600 }}>
+            Voice sample <span style={{ opacity: 0.6, fontWeight: 400 }}>(optional — 5-30s of clean speech, mp3/wav/m4a, ≤20MB. Fed to ElevenLabs voice cloning when audio pipeline lands.)</span>
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <label
+              className="btn-ghost btn-sm"
+              style={{ fontSize: 11, padding: "5px 12px", display: "inline-flex", alignItems: "center", gap: 4, cursor: draftUploading === "voice" ? "wait" : "pointer" }}
+            >
+              <Upload size={11} /> {draftUploading === "voice" ? "Uploading…" : draft.voice_sample_url ? "Replace audio" : "Add audio"}
+              <input
+                type="file"
+                accept="audio/*"
+                style={{ display: "none" }}
+                disabled={draftUploading !== null}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadDraftVoice(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {draft.voice_sample_url && (
+              <>
+                <audio src={draft.voice_sample_url} controls style={{ height: 28, maxWidth: 280 }} />
+                <button
+                  onClick={() => setDraft((d) => ({ ...d, voice_sample_url: "" }))}
+                  className="btn-ghost btn-sm"
+                  style={{ fontSize: 11, padding: "4px 8px" }}
+                >
+                  <X size={11} /> Remove
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -281,17 +407,17 @@ function AvatarCard({
   onDeleted: (id: string) => void;
 }) {
   const toast = useToast();
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState<"face" | "voice" | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function uploadFace(file: File) {
-    setUploading(true);
+    setUploading("face");
     const fd = new FormData();
     fd.append("file", file);
     fd.append("prefix", `avatars/${avatar.id}/face`);
-    const up = await fetch("/api/uploads/image", { method: "POST", body: fd });
+    const up = await fetch("/api/uploads/media", { method: "POST", body: fd });
     if (!up.ok) {
-      setUploading(false);
+      setUploading(null);
       const d = await up.json().catch(() => ({}));
       toast.error("Upload failed", d?.error ?? `HTTP ${up.status}`);
       return;
@@ -303,7 +429,7 @@ function AvatarCard({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ face_image_urls: [...avatar.face_image_urls, url] }),
     });
-    setUploading(false);
+    setUploading(null);
     if (!patch.ok) {
       toast.error("Couldn't attach photo", `HTTP ${patch.status}`);
       return;
@@ -311,6 +437,46 @@ function AvatarCard({
     const data = await patch.json();
     onChanged(data.avatar);
     toast.success("Face photo added", `${data.avatar.face_image_urls.length} reference${data.avatar.face_image_urls.length === 1 ? "" : "s"} total`);
+  }
+
+  async function uploadVoiceSample(file: File) {
+    setUploading("voice");
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("prefix", `avatars/${avatar.id}/voice`);
+    const up = await fetch("/api/uploads/media", { method: "POST", body: fd });
+    if (!up.ok) {
+      setUploading(null);
+      const d = await up.json().catch(() => ({}));
+      toast.error("Upload failed", d?.error ?? `HTTP ${up.status}`);
+      return;
+    }
+    const { url } = await up.json();
+    const patch = await fetch(`/api/avatars/${encodeURIComponent(avatar.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voice_sample_url: url }),
+    });
+    setUploading(null);
+    if (!patch.ok) {
+      toast.error("Couldn't attach voice sample", `HTTP ${patch.status}`);
+      return;
+    }
+    const data = await patch.json();
+    onChanged(data.avatar);
+    toast.success("Voice sample uploaded");
+  }
+
+  async function removeVoiceSample() {
+    if (!confirm("Remove this voice sample?")) return;
+    const r = await fetch(`/api/avatars/${encodeURIComponent(avatar.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voice_sample_url: null }),
+    });
+    if (!r.ok) { toast.error("Couldn't remove", `HTTP ${r.status}`); return; }
+    const data = await r.json();
+    onChanged(data.avatar);
   }
 
   async function removeFace(url: string) {
@@ -367,14 +533,14 @@ function AvatarCard({
           <span className="eyebrow" style={{ fontSize: 10 }}>Face references · {avatar.face_image_urls.length}/3 recommended</span>
           <label
             className="btn-ghost btn-sm"
-            style={{ fontSize: 11, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 4, cursor: uploading ? "wait" : "pointer" }}
+            style={{ fontSize: 11, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 4, cursor: uploading === "face" ? "wait" : "pointer" }}
           >
-            <Upload size={11} /> {uploading ? "Uploading…" : "Add photo"}
+            <Upload size={11} /> {uploading === "face" ? "Uploading…" : "Add photo"}
             <input
               type="file"
               accept="image/*"
               style={{ display: "none" }}
-              disabled={uploading}
+              disabled={uploading !== null}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) uploadFace(f);
@@ -406,6 +572,44 @@ function AvatarCard({
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Voice sample */}
+      <div style={{ marginTop: 10 }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <span className="eyebrow" style={{ fontSize: 10 }}>
+            Voice sample {avatar.voice_sample_url ? "· uploaded" : "· none yet"}
+          </span>
+          <label
+            className="btn-ghost btn-sm"
+            style={{ fontSize: 11, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 4, cursor: uploading === "voice" ? "wait" : "pointer" }}
+          >
+            <Upload size={11} /> {uploading === "voice" ? "Uploading…" : avatar.voice_sample_url ? "Replace audio" : "Add audio"}
+            <input
+              type="file"
+              accept="audio/*"
+              style={{ display: "none" }}
+              disabled={uploading !== null}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadVoiceSample(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+        {avatar.voice_sample_url ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <audio src={avatar.voice_sample_url} controls style={{ height: 32, flex: 1, maxWidth: 360 }} />
+            <button onClick={removeVoiceSample} className="btn-ghost btn-sm" title="Remove voice sample" style={{ color: "#ff6b6b", padding: 4 }}>
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ) : (
+          <p className="muted-sm" style={{ fontSize: 11, padding: 8, border: "1px dashed var(--border)", borderRadius: 4 }}>
+            5–30s of clean speech for ElevenLabs voice cloning. mp3/wav/m4a, ≤20MB.
+          </p>
         )}
       </div>
 

@@ -44,8 +44,10 @@ export async function POST(req: NextRequest) {
     name,
     brand_slug: typeof body.brand_slug === "string" && body.brand_slug.trim() ? body.brand_slug.trim() : null,
     persona,
+    face_image_urls: Array.isArray(body.face_image_urls) ? body.face_image_urls.map(String) : [],
     voice_id: typeof body.voice_id === "string" && body.voice_id.trim() ? body.voice_id.trim() : null,
     voice_provider: typeof body.voice_provider === "string" && body.voice_provider.trim() ? body.voice_provider.trim() : null,
+    voice_sample_url: typeof body.voice_sample_url === "string" && body.voice_sample_url.trim() ? body.voice_sample_url.trim() : null,
     notes: typeof body.notes === "string" ? body.notes : null,
   });
 
