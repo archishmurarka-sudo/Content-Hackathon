@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthed } from "@/lib/auth";
 import { generateIgPost, listIgPosts, IG_FORMATS, IG_THEMES, IG_AUDIENCES, type IgFormat } from "@/lib/instagram";
-import { fetchScriptEnrichment } from "@/lib/connoisseur_enrichment";
+import { resolveEnrichmentFromBody } from "@/lib/connoisseur_enrichment";
 import { ensureProductsLoaded, findProduct } from "@/lib/data";
 
 export const runtime = "nodejs";
@@ -44,15 +44,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "GEMINI_API_KEY not set on the server" }, { status: 500 });
   }
 
-  // Pre-fetch enrichment in parallel with product hydration. Soft-fails to
-  // undefined so MCP outages never block image generation.
-  let enrichment: Awaited<ReturnType<typeof fetchScriptEnrichment>> | undefined;
-  if (enrich_with_connoisseur) {
-    await ensureProductsLoaded();
-    const productForEnrich = findProduct(product_id);
-    if (productForEnrich) {
-      enrichment = await fetchScriptEnrichment(productForEnrich).catch(() => undefined);
-    }
+  // Resolve enrichment (toggle + operator override panel). Soft-fails so
+  // MCP outages never block image generation.
+  let enrichment: Awaited<ReturnType<typeof resolveEnrichmentFromBody>> | undefined;
+  await ensureProductsLoaded();
+  const productForEnrich = findProduct(product_id);
+  if (productForEnrich) {
+    enrichment = await resolveEnrichmentFromBody(productForEnrich, body);
   }
 
   try {

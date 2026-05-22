@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, FileText, Sparkles, Package, Beaker } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
+import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
 
 type Product = {
   id: string;
@@ -107,6 +108,14 @@ export default function ScriptsPage() {
   } | null>(null);
   // Per-generation operator toggle — default ON.
   const [enrichWithConnoisseur, setEnrichWithConnoisseur] = useState(true);
+  // Connoisseur priority panel state — opens via the toggle's Customize chip.
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [enrichmentOverride, setEnrichmentOverride] = useState<EnrichmentOverride | null>(null);
+  const totalPicked = enrichmentOverride
+    ? enrichmentOverride.voice_atoms.length + enrichmentOverride.selling_points.length +
+      enrichmentOverride.winner_combos.length + enrichmentOverride.compliance_gates.length +
+      enrichmentOverride.archetype_performance.length
+    : null;
 
   useEffect(() => {
     fetch("/api/products", { cache: "no-store" })
@@ -156,6 +165,7 @@ export default function ScriptsPage() {
         competitor_refs: competitorRefs.trim() || undefined,
         notes: extraNotes.trim() || undefined,
         enrich_with_connoisseur: enrichWithConnoisseur,
+        enrichment_override: enrichmentOverride ?? undefined,
       }),
     });
     setGenerating(false);
@@ -520,12 +530,20 @@ export default function ScriptsPage() {
                 lastSummary={lastEnrichment
                   ? `${lastEnrichment.brand_slug} · ${lastEnrichment.counts.voice_atoms} atoms · ${lastEnrichment.counts.selling_points} SP · ${lastEnrichment.counts.compliance_gates} gates`
                   : null}
+                onCustomize={() => setPanelOpen(true)}
+                pickedCount={totalPicked}
               />
               <button onClick={generate} disabled={generating || !selectedProductId}>
                 {generating ? "Generating…" : <>Generate {scriptCount} <ArrowRight size={14} /></>}
               </button>
             </div>
           </div>
+
+          <ConnoisseurPanel
+            open={panelOpen}
+            onClose={() => setPanelOpen(false)}
+            onChange={setEnrichmentOverride}
+          />
 
           {/* Scripts table */}
           <section>

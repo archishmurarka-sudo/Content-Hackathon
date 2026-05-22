@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Sparkles, Send, TrendingUp, Image as ImageIcon, ArrowRight } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
+import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
 
 type Creator = {
   handle: string;
@@ -80,6 +81,13 @@ function Home() {
   // the brief is built without the corpus block in the storyboard prompt and
   // the post-storyboard compliance pre-ship check is also skipped server-side.
   const [enrichWithConnoisseur, setEnrichWithConnoisseur] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [enrichmentOverride, setEnrichmentOverride] = useState<EnrichmentOverride | null>(null);
+  const totalPicked = enrichmentOverride
+    ? enrichmentOverride.voice_atoms.length + enrichmentOverride.selling_points.length +
+      enrichmentOverride.winner_combos.length + enrichmentOverride.compliance_gates.length +
+      enrichmentOverride.archetype_performance.length
+    : null;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -152,7 +160,7 @@ function Home() {
     const res = await fetch("/api/briefs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ creator_handle: handle, product_id: productId, target_duration_s: duration, funnel_stage: funnelStage, enrich_with_connoisseur: enrichWithConnoisseur }),
+      body: JSON.stringify({ creator_handle: handle, product_id: productId, target_duration_s: duration, funnel_stage: funnelStage, enrich_with_connoisseur: enrichWithConnoisseur, enrichment_override: enrichmentOverride ?? undefined }),
     });
     setSubmitting(false);
     const data = await res.json().catch(() => ({}));
@@ -261,7 +269,12 @@ function Home() {
                 </button>
               ))}
             </div>
-            <ConnoisseurToggle enabled={enrichWithConnoisseur} onChange={setEnrichWithConnoisseur} />
+            <ConnoisseurToggle
+              enabled={enrichWithConnoisseur}
+              onChange={setEnrichWithConnoisseur}
+              onCustomize={() => setPanelOpen(true)}
+              pickedCount={totalPicked}
+            />
           </div>
           {error && <p style={{ color: "var(--danger)", marginTop: 12, fontSize: 13 }}>{error}</p>}
         </form>
@@ -464,6 +477,12 @@ function Home() {
           </div>
         </section>
       </div>
+
+      <ConnoisseurPanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        onChange={setEnrichmentOverride}
+      />
     </div>
   );
 }

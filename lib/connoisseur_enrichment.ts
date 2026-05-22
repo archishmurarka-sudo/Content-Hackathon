@@ -98,8 +98,10 @@ async function safeCallList(toolName: string, args: Record<string, any>, status:
   }
 }
 
-export async function fetchScriptEnrichment(product: Product, opts?: { limit?: number }): Promise<ScriptEnrichment> {
-  const slug = brandSlugForProduct(product);
+export async function fetchScriptEnrichment(product: Product, opts?: { limit?: number; brand_slug_override?: string }): Promise<ScriptEnrichment> {
+  // When the caller knows the exact corpus slug (e.g. /api/connoisseur/preview
+  // for an arbitrary brand), let them bypass the product-name mapper.
+  const slug = opts?.brand_slug_override?.trim() || brandSlugForProduct(product);
   const limit = opts?.limit ?? 20;
   const status: Record<string, "ok" | "empty" | "error"> = {};
 
@@ -144,6 +146,32 @@ export async function fetchScriptEnrichment(product: Product, opts?: { limit?: n
     }),
     tool_status: status,
   };
+}
+
+// Decide what enrichment to use for a generation request body. Honors:
+//   1. enabled flag (`enrich_with_connoisseur: false` → no enrichment)
+//   2. operator-supplied override blob (`enrichment_override`) — the panel
+//      sends this when the operator has hand-picked priority items, so we
+//      use it as-is and skip the MCP fetch
+//   3. otherwise → live fetch from the MCP for this product's brand
+//
+// Always soft-fails to undefined on MCP error.
+export async function resolveEnrichmentFromBody(product: Product, body: any): Promise<ScriptEnrichment | undefined> {
+  const enabled = body?.enrich_with_connoisseur !== false;
+  if (!enabled) return undefined;
+  const override = body?.enrichment_override;
+  if (override && typeof override === "object" && Array.isArray(override.voice_atoms)) {
+    return {
+      brand_slug: String(override.brand_slug ?? brandSlugForProduct(product)),
+      voice_atoms: Array.isArray(override.voice_atoms) ? override.voice_atoms : [],
+      selling_points: Array.isArray(override.selling_points) ? override.selling_points : [],
+      winner_combos: Array.isArray(override.winner_combos) ? override.winner_combos : [],
+      compliance_gates: Array.isArray(override.compliance_gates) ? override.compliance_gates : [],
+      archetype_performance: Array.isArray(override.archetype_performance) ? override.archetype_performance : [],
+      tool_status: override.tool_status ?? {},
+    };
+  }
+  return await fetchScriptEnrichment(product).catch(() => undefined);
 }
 
 // Render the enrichment as a prompt block. Kept here (not in the prompt

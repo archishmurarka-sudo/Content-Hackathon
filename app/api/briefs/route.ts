@@ -6,7 +6,7 @@ import { generateFrameImage } from "@/lib/images";
 import { fetchYouTubeVideo } from "@/lib/youtube";
 import { logEvent } from "@/lib/events";
 import { isAuthed } from "@/lib/auth";
-import { fetchScriptEnrichment, preShipCheck, brandSlugForProduct } from "@/lib/connoisseur_enrichment";
+import { fetchScriptEnrichment, preShipCheck, brandSlugForProduct, resolveEnrichmentFromBody } from "@/lib/connoisseur_enrichment";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,13 +85,10 @@ export async function POST(req: NextRequest) {
     if (prototypes.length === 0) {
       throw new Error("no matching prototypes found");
     }
-    // Live Connoisseur corpus enrichment (voice atoms + selling points +
-    // winners + gates + archetype perf). Soft-fails so MCP downtime never
-    // blocks brief generation. Skipped entirely when the operator turned
-    // the toggle off.
-    const enrichment = enrich_with_connoisseur
-      ? await fetchScriptEnrichment(product).catch(() => undefined)
-      : undefined;
+    // Live enrichment (voice atoms + selling points + winners + gates +
+    // archetype perf). Honors enrich_with_connoisseur toggle and any
+    // operator-picked override blob from the Connoisseur panel.
+    const enrichment = await resolveEnrichmentFromBody(product, body);
     const sb = await generateStoryboard({
       creator,
       product,

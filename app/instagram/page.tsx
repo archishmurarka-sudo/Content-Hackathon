@@ -8,6 +8,7 @@ import { Camera as Instagram, Sparkles, Trash2, Copy, Upload, CheckCircle2, Down
 import { useToast } from "@/components/toast";
 import { BrandContextPanel } from "@/components/brand-context-panel";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
+import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
 import type { BrandContext } from "@/lib/brand-context";
 
 type Product = { id: string; name: string; brand: string; one_liner?: string };
@@ -78,6 +79,13 @@ export default function InstagramPage() {
   const [brandCtx, setBrandCtx] = useState<BrandContext | null>(null);
   const [brandCtxLoading, setBrandCtxLoading] = useState(false);
   const [useBrandIntel, setUseBrandIntel] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [enrichmentOverride, setEnrichmentOverride] = useState<EnrichmentOverride | null>(null);
+  const igTotalPicked = enrichmentOverride
+    ? enrichmentOverride.voice_atoms.length + enrichmentOverride.selling_points.length +
+      enrichmentOverride.winner_combos.length + enrichmentOverride.compliance_gates.length +
+      enrichmentOverride.archetype_performance.length
+    : null;
 
   useEffect(() => {
     if (!productId) return;
@@ -116,7 +124,7 @@ export default function InstagramPage() {
     const res = await fetch("/api/instagram", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: productId, format, theme, audience, vibe, enrich_with_connoisseur: useBrandIntel }),
+      body: JSON.stringify({ product_id: productId, format, theme, audience, vibe, enrich_with_connoisseur: useBrandIntel, enrichment_override: enrichmentOverride ?? undefined }),
     });
     setGenerating(false);
     const data = await res.json().catch(() => ({}));
@@ -274,7 +282,12 @@ export default function InstagramPage() {
           </div>
 
           <div style={{ marginTop: 14 }}>
-            <ConnoisseurToggle enabled={useBrandIntel} onChange={setUseBrandIntel} />
+            <ConnoisseurToggle
+              enabled={useBrandIntel}
+              onChange={setUseBrandIntel}
+              onCustomize={() => setPanelOpen(true)}
+              pickedCount={igTotalPicked}
+            />
           </div>
 
           {error && <p style={{ color: "var(--danger, #d33)", marginTop: 12, fontSize: 13 }}>{error}</p>}
@@ -410,6 +423,12 @@ export default function InstagramPage() {
           ))}
         </div>
       )}
+
+      <ConnoisseurPanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        onChange={setEnrichmentOverride}
+      />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { isAuthed } from "@/lib/auth";
 import { ensureProductsLoaded, findProduct } from "@/lib/data";
 import { generateScripts, type ScriptStyle, type Placement } from "@/lib/script-generator";
 import { insertScripts, listScriptsForProduct, newBatchId } from "@/lib/ad-scripts";
-import { fetchScriptEnrichment } from "@/lib/connoisseur_enrichment";
+import { fetchScriptEnrichment, resolveEnrichmentFromBody } from "@/lib/connoisseur_enrichment";
 import { logEvent } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -49,13 +49,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "GEMINI_API_KEY not set on the server" }, { status: 500 });
   }
 
-  // Fetch Connoisseur enrichment (voice atoms, selling points, winners,
-  // compliance gates, archetype perf) in parallel — soft-fails to undefined
-  // so MCP downtime never blocks script generation. Skipped entirely when
-  // the operator turned the toggle off.
-  const enrichment = enrich_with_connoisseur
-    ? await fetchScriptEnrichment(product).catch(() => undefined)
-    : undefined;
+  // Resolve enrichment: honors the toggle, accepts an operator-picked
+  // override blob from the Connoisseur panel, otherwise fetches live.
+  // Soft-fails to undefined so MCP downtime never blocks generation.
+  const enrichment = await resolveEnrichmentFromBody(product, body);
 
   try {
     const generated = await generateScripts({

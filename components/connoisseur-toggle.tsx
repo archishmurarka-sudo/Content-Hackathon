@@ -20,9 +20,16 @@ type Props = {
   lastSummary?: string | null;
   // Optional override for the label (e.g. "Enrich Instagram by Connoisseur").
   label?: string;
+  // Optional callback — when present, a "Customize" chevron is rendered next
+  // to the toggle. Clicking it fires this instead of toggling. Wire it to
+  // setOpen(true) on the parent's ConnoisseurPanel state.
+  onCustomize?: () => void;
+  // When non-null, shows a small badge with the count of selected priority
+  // items so the operator knows their override is active.
+  pickedCount?: number | null;
 };
 
-export function ConnoisseurToggle({ enabled, onChange, lastSummary, label }: Props) {
+export function ConnoisseurToggle({ enabled, onChange, lastSummary, label, onCustomize, pickedCount }: Props) {
   return (
     <div
       style={{
@@ -79,6 +86,28 @@ export function ConnoisseurToggle({ enabled, onChange, lastSummary, label }: Pro
         <span style={{ color: "var(--muted-2)", fontWeight: 400, fontSize: 11 }}>
           · {lastSummary}
         </span>
+      )}
+      {onCustomize && enabled && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onCustomize(); }}
+          title="Pick which corpus items to prioritize"
+          style={{
+            marginLeft: 4,
+            padding: "3px 9px",
+            fontSize: 10,
+            fontWeight: 600,
+            background: pickedCount && pickedCount > 0 ? "var(--accent)" : "transparent",
+            color: pickedCount && pickedCount > 0 ? "var(--accent-fg)" : "var(--accent)",
+            border: `1px solid var(--accent)`,
+            borderRadius: 999,
+            cursor: "pointer",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          {pickedCount != null ? `${pickedCount} picked ▾` : "Customize ▾"}
+        </button>
       )}
     </div>
   );

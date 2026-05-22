@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { findCreator, rankPrototypes, ensureCreatorsLoaded, ensureProductsLoaded, findProduct } from "@/lib/data";
 import { generateStoryboard } from "@/lib/storyboard";
 import { getBrief, setStoryboard, setFailed } from "@/lib/briefs";
-import { fetchScriptEnrichment } from "@/lib/connoisseur_enrichment";
+import { resolveEnrichmentFromBody } from "@/lib/connoisseur_enrichment";
 import { logEvent } from "@/lib/events";
 import { isAuthed } from "@/lib/auth";
 
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!brief) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({} as any));
-  const enrich = body.enrich_with_connoisseur !== false; // default ON
 
   await ensureCreatorsLoaded();
   await ensureProductsLoaded();
@@ -32,11 +31,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const previousStoryboard = brief.storyboard;
   const startedAt = Date.now();
 
-  // Fetch enrichment in parallel with prototype ranking. Soft-fails so MCP
-  // outages don't block the regenerate.
-  const enrichment = enrich
-    ? await fetchScriptEnrichment(product).catch(() => undefined)
-    : undefined;
+  // Resolve enrichment (toggle + operator-picked override panel). Soft-fails
+  // so MCP outages don't block regenerate.
+  const enrichment = await resolveEnrichmentFromBody(product, body);
 
   try {
     const prototypes = rankPrototypes({
