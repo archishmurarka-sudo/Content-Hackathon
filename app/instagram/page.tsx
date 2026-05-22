@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 // lucide-react doesn't export an `Instagram` glyph in this version; Camera
 // is the closest neutral substitute that fits the social-photo metaphor.
-import { Camera as Instagram, Sparkles, Trash2, Copy, Upload, CheckCircle2 } from "lucide-react";
+import { Camera as Instagram, Sparkles, Trash2, Copy, Upload, CheckCircle2, Download } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { BrandContextPanel } from "@/components/brand-context-panel";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
@@ -375,6 +375,19 @@ export default function InstagramPage() {
                 >
                   <Upload size={12} /> {publishingId === post.id ? "Publishing…" : post.published_at ? "Re-publish" : "Publish"}
                 </button>
+                {post.image_url && (
+                  <a
+                    href={`${post.image_url}${post.image_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(
+                      `${(products.find((p) => p.id === post.product_id)?.name ?? post.product_id).replace(/\s+/g, "-").toLowerCase()}-${post.theme}-${post.format}.png`
+                    )}`}
+                    download
+                    className="btn-ghost btn-sm"
+                    style={{ fontSize: 11, padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none" }}
+                    title="Download PNG to disk"
+                  >
+                    <Download size={12} /> Download
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => copyCaption(post)}
