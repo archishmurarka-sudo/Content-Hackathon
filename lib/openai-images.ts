@@ -45,8 +45,10 @@ export type GenerateImageResult = PutResult & {
 };
 
 export async function generateAdImage(opts: GenerateImageOptions): Promise<GenerateImageResult> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY not set");
+  // Accept either OPENAI_API_KEY (canonical) or OPENAI_KEY (the env-var name
+  // the operator chose on Railway). Same key — just two acceptable spellings.
+  const key = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY;
+  if (!key) throw new Error("OPENAI_API_KEY / OPENAI_KEY not set");
 
   const model = imageModel();
   const aspect = opts.aspect ?? "portrait";

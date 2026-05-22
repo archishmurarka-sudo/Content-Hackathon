@@ -19,8 +19,8 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ error: "OPENAI_API_KEY not set on the server" }, { status: 500 });
+  if (!(process.env.OPENAI_API_KEY || process.env.OPENAI_KEY)) {
+    return NextResponse.json({ error: "OPENAI_API_KEY / OPENAI_KEY not set on the server" }, { status: 500 });
   }
 
   const script = await getScript(id);

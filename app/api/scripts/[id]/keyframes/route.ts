@@ -23,8 +23,8 @@ const CONCURRENCY = 3;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ error: "OPENAI_API_KEY not set on the server" }, { status: 500 });
+  if (!(process.env.OPENAI_API_KEY || process.env.OPENAI_KEY)) {
+    return NextResponse.json({ error: "OPENAI_API_KEY / OPENAI_KEY not set on the server" }, { status: 500 });
   }
   if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json({ error: "GEMINI_API_KEY not set on the server" }, { status: 500 });
