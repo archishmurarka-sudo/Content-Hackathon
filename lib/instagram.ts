@@ -14,6 +14,7 @@ import { generateAdImage, type ImageAspect } from "./openai-images";
 import { bump } from "./usage";
 import { brandGuidelinesFor, renderGuidelinesForPrompt } from "./brand-guidelines";
 import { renderEnrichmentForPrompt } from "./connoisseur_enrichment";
+import { extractPromoSignals, renderPromoBlockForImage } from "./promo-signals";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -291,16 +292,33 @@ function rowToPost(r: any): IgPost {
   };
 }
 
-async function draftCreative(opts: {
+// Build the Gemini meta-prompt that produces the IG creative (image_prompt
+// + caption + hashtags). Pure — no API calls. Exported so the preview
+// endpoint can show the operator what would be sent to Gemini before any
+// paid generation runs. `draftCreative` uses this internally too so the
+// preview and the actual generation are guaranteed to use the same prompt.
+//
+// Returns the assembled prompt plus a few intermediate blocks so the UI
+// can highlight what's coming from each source (Connoisseur, brand
+// guidelines, promo signals, theme cue).
+export function buildIgCreativePrompt(opts: {
   product: ReturnType<typeof findProduct>;
   theme: string;
   audience: string;
   vibe: string;
   format: IgFormat;
   enrichment?: import("./connoisseur_enrichment").ScriptEnrichment;
-}): Promise<{ image_prompt: string; caption: string; hashtags: string[] }> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY not set");
+}): {
+  prompt: string;
+  blocks: {
+    enrichment_block: string;
+    guidelines_block: string;
+    promo_block: string;
+    theme_cue: string;
+    audience_line: string;
+    format_hint: string;
+  };
+} {
   const p = opts.product;
   if (!p) throw new Error("no product");
 
@@ -321,7 +339,7 @@ async function draftCreative(opts: {
     before_after: "Two-panel implied transition — same setting, different time of day or mood. NO literal 'before/after' labels.",
     ritual: "A moment of ritual — opening the jar, two gummies in a palm, pouring a glass of water, placed on a nightstand at golden hour. Intimate, slow, candle-warm.",
     social_proof: "Editorial flat-lay — product on a desk surrounded by a handwritten note, a folded newspaper-style review card, a half-finished coffee. Documentary feel.",
-    sale_announcement: "BOLD SALE ENERGY. Dark dramatic backdrop, warm gold rim-light, the product elevated as the hero of a high-contrast promotional frame. Visual cues of urgency — moody chiaroscuro, deep blacks, a single warm spotlight. Premium not tacky — think editorial Black Friday cover, not clearance-bin. NO discount-percentage text or numbers in the image (text is added in post).",
+    sale_announcement: "BOLD SALE ENERGY. Dark dramatic backdrop, warm gold rim-light, the product elevated as the hero of a high-contrast promotional frame. Visual cues of urgency — moody chiaroscuro, deep blacks, a single warm spotlight. Premium not tacky — think editorial Black Friday cover, not clearance-bin. If a specific price, percent-off, or event name is supplied in the PROMO OVERLAY block below, render it AS LARGE, CLEAN TYPOGRAPHY directly in the frame (uppercase sans-serif, tight tracking, gold or cream on the dark backdrop). Otherwise no text in the image.",
     packshot: "Pristine studio packshot — seamless paper backdrop, hero product centered, soft rim-light, immaculate composition.",
     founder_voice: "Documentary feel — hand holding the product on a workbench / open notebook / kitchen table. Slightly imperfect, candid framing.",
     mood: "Atmospheric, aspirational — heavy mood lighting, asymmetric composition, the product almost as a still-life prop.",
@@ -332,6 +350,9 @@ async function draftCreative(opts: {
   const audienceLine = audience
     ? `Audience: ${audience.label} — anchor pains: ${audience.pain}.`
     : "Audience: general wellness — no specific pain anchor.";
+
+  const promo = extractPromoSignals(opts.vibe ?? "");
+  const promoBlock = renderPromoBlockForImage(promo);
 
   const guidelines = brandGuidelinesFor(p.brand);
   const guidelinesBlock = guidelines
@@ -360,7 +381,7 @@ ${audienceLine}
 Vibe (operator's free-text direction — this drives the atmosphere; honour it literally if specific):
 ${opts.vibe || "(no specific vibe — default to brand visual direction)"}
 
-Placement: ${formatHint}
+${promoBlock ? promoBlock + "\n\n" : ""}Placement: ${formatHint}
 
 ${p.hero_image_url ? `PRODUCT REFERENCE IMAGE (CRITICAL)
 The actual product packshot will be supplied to the image model as a reference. The "image_prompt" you write below must DESCRIBE THE SCENE AROUND that exact product — the SAME bottle, SAME label, SAME colors. Do NOT redesign or re-invent the product. Phrase the image_prompt as "Place the product in <scene with lighting and composition>" not "A photograph of a bottle".` : ""}
@@ -369,10 +390,36 @@ ${opts.enrichment ? `\n${renderEnrichmentForPrompt(opts.enrichment)}\n\n` : ""}C
 
 Output a single JSON object with EXACTLY these keys, no markdown:
 {
-  "image_prompt": "ONE paragraph (≤140 words). Start with 'Place the supplied product in...' if a reference image will be used (see PRODUCT REFERENCE IMAGE above). Describe the SCENE — lighting, palette, props, framing, mood — explicitly using the THEME VISUAL TREATMENT and the operator's Vibe text above. If the vibe mentions a specific event/season (Black Friday, Diwali, New Year, summer, etc.), the scene must visually reflect that — do not just list the words. No text/overlay instructions; overlays go in post.",
-  "caption": "Instagram caption: hook line, then 1-3 short paragraphs. Honour the BRAND VOICE + DO + DON'T rules. If audience is perimenopause / menopause / men's T / new parents / 50+, speak to that specific lived experience without alarmism.",
+  "image_prompt": "ONE paragraph (≤140 words). Start with 'Place the supplied product in...' if a reference image will be used (see PRODUCT REFERENCE IMAGE above). Describe the SCENE — lighting, palette, props, framing, mood — explicitly using the THEME VISUAL TREATMENT and the operator's Vibe text above. If the vibe mentions a specific event/season (Black Friday, Prime Day, Diwali, New Year, summer, etc.), the scene must visually reflect that — do not just list the words. ${promo.has ? `A PROMO OVERLAY block is supplied above — you MUST describe the exact typography in the image: spell out the price/percent/event verbatim (e.g. '$27', 'PRIME DAY', '20% OFF'), specify size/placement/color/font feel, and ensure it does not cover the product label. This is the most important element of the frame.` : `No text/overlay instructions; overlays go in post.`}",
+  "caption": "Instagram is IMAGE-FIRST. Keep the caption SHORT — one punchy hook line, then at most 1–2 short lines of context. Hard cap: ~50 words total. The image carries the message; the caption only adds the click. ${promo.has ? `Do NOT repeat the price/event/discount in long-form prose — it's already rendered on the image. Reference it briefly only ('live now', 'today only', 'link in bio').` : ""} Honour the BRAND VOICE + DO + DON'T rules. If audience is perimenopause / menopause / men's T / new parents / 50+, speak to that lived experience without alarmism.",
   "hashtags": ["array of 8-12 hashtags, no '#' prefix, lowercase. Always include these brand tags first: ${JSON.stringify(standardTags)}. Then a mix of category + audience-specific niche."]
 }`;
+
+  return {
+    prompt,
+    blocks: {
+      enrichment_block: opts.enrichment ? renderEnrichmentForPrompt(opts.enrichment) : "",
+      guidelines_block: guidelinesBlock,
+      promo_block: promoBlock,
+      theme_cue: themeCue,
+      audience_line: audienceLine,
+      format_hint: formatHint,
+    },
+  };
+}
+
+async function draftCreative(opts: {
+  product: ReturnType<typeof findProduct>;
+  theme: string;
+  audience: string;
+  vibe: string;
+  format: IgFormat;
+  enrichment?: import("./connoisseur_enrichment").ScriptEnrichment;
+}): Promise<{ image_prompt: string; caption: string; hashtags: string[] }> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("GEMINI_API_KEY not set");
+
+  const { prompt } = buildIgCreativePrompt(opts);
 
   const res = await fetch(
     `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`,

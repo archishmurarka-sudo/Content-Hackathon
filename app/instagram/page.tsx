@@ -82,6 +82,29 @@ export default function InstagramPage() {
   const [brandCtxLoading, setBrandCtxLoading] = useState(false);
   const [useBrandIntel, setUseBrandIntel] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+
+  // Preview state — dry-run of the prompt assembly with no paid API calls.
+  // Fires POST /api/instagram/preview with the same body Generate would
+  // send and renders the result inline so the operator can see what the
+  // Connoisseur enrichment is injecting before spending on an image gen.
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<null | {
+    gemini_prompt: string;
+    blocks: { enrichment_block: string; guidelines_block: string; promo_block: string; theme_cue: string; audience_line: string; format_hint: string };
+    enrichment_summary: null | {
+      brand_slug: string;
+      counts: Record<string, number>;
+      tool_status: Record<string, string>;
+      voice_atoms: { phrase: string; category?: string | null }[];
+      selling_points: { point: string; mechanism?: string | null }[];
+      winner_combos: { combo: string; evidence?: string | null; performance?: string | null }[];
+      compliance_gates: { pattern: string; severity: string; safer_alternative?: string | null }[];
+      archetype_performance: { archetype: string; performance?: string | null }[];
+    };
+    reference: { hero_present: boolean; gallery_count: number };
+  }>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewSection, setPreviewSection] = useState<"connoisseur" | "full">("connoisseur");
   const [enrichmentOverride, setEnrichmentOverride] = useState<EnrichmentOverride | null>(null);
   const igTotalPicked = enrichmentOverride
     ? enrichmentOverride.voice_atoms.length + enrichmentOverride.selling_points.length +
@@ -153,6 +176,32 @@ export default function InstagramPage() {
       toast.error("Image generation failed", data?.error ?? "see settings");
     }
     refresh();
+  }
+
+  // Preview — dry-run the prompt build with the current form state. No paid
+  // API calls; just shows what would be sent to Gemini (and the Connoisseur
+  // block being injected). Same body shape as generate() so the preview is
+  // guaranteed to match the next generate click.
+  async function runPreview() {
+    setPreviewError(null);
+    setPreviewing(true);
+    setPreview(null);
+    try {
+      const res = await fetch("/api/instagram/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: productId, format, theme, audience, vibe, enrich_with_connoisseur: useBrandIntel, enrichment_override: enrichmentOverride ?? undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPreviewError(data?.error ?? "preview failed");
+        return;
+      }
+      setPreview(data);
+      setPreviewSection(data?.enrichment_summary ? "connoisseur" : "full");
+    } finally {
+      setPreviewing(false);
+    }
   }
 
   // Pre-flight check on the selected product. If no hero is on file the
@@ -291,6 +340,15 @@ export default function InstagramPage() {
             <button type="submit" disabled={generating || !productId || !theme}>
               {generating ? "Generating…" : <><Sparkles size={14} /> Generate</>}
             </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={runPreview}
+              disabled={previewing || !productId || !theme}
+              title="Show the full Gemini prompt + Connoisseur enrichment that will be sent — no paid API calls."
+            >
+              {previewing ? "Loading…" : "Preview prompt"}
+            </button>
           </div>
 
           <div className="row" style={{ marginTop: 14, gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -369,6 +427,149 @@ export default function InstagramPage() {
           </div>
 
           {error && <p style={{ color: "var(--danger)", marginTop: 12, fontSize: 13 }}>{error}</p>}
+          {previewError && <p style={{ color: "var(--danger)", marginTop: 12, fontSize: 13 }}>preview: {previewError}</p>}
+
+          {preview && (
+            <div
+              style={{
+                marginTop: 16,
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                background: "var(--surface-2)",
+                overflow: "hidden",
+              }}
+            >
+              <div className="row" style={{ alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid var(--border)", flexWrap: "wrap", gap: 8 }}>
+                <div className="row" style={{ alignItems: "center", gap: 8 }}>
+                  <span className="eyebrow">Preview · dry-run</span>
+                  <span className="muted-sm" style={{ fontSize: 11 }}>
+                    {preview.enrichment_summary
+                      ? `🍄 ${preview.enrichment_summary.brand_slug} · ${preview.enrichment_summary.counts.voice_atoms}v / ${preview.enrichment_summary.counts.selling_points}sp / ${preview.enrichment_summary.counts.winner_combos}wc / ${preview.enrichment_summary.counts.compliance_gates}cg`
+                      : "(Connoisseur off — no enrichment injected)"}
+                  </span>
+                </div>
+                <div className="row" style={{ gap: 4 }}>
+                  <button
+                    type="button"
+                    className={previewSection === "connoisseur" ? "" : "btn-ghost"}
+                    style={{ fontSize: 11, padding: "4px 10px" }}
+                    onClick={() => setPreviewSection("connoisseur")}
+                  >
+                    Connoisseur
+                  </button>
+                  <button
+                    type="button"
+                    className={previewSection === "full" ? "" : "btn-ghost"}
+                    style={{ fontSize: 11, padding: "4px 10px" }}
+                    onClick={() => setPreviewSection("full")}
+                  >
+                    Full Gemini prompt
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ fontSize: 11, padding: "4px 10px" }}
+                    onClick={() => setPreview(null)}
+                    title="Close preview"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {previewSection === "connoisseur" && (
+                <div style={{ padding: 14 }}>
+                  {preview.enrichment_summary ? (
+                    <>
+                      <PreviewSlot label="Voice atoms" count={preview.enrichment_summary.voice_atoms.length}>
+                        {preview.enrichment_summary.voice_atoms.slice(0, 12).map((a, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "var(--text-2)", padding: "2px 0" }}>
+                            <span style={{ color: "var(--accent)" }}>&ldquo;</span>{a.phrase}<span style={{ color: "var(--accent)" }}>&rdquo;</span>
+                            {a.category && <span className="muted-sm" style={{ marginLeft: 6, fontSize: 10 }}>[{a.category}]</span>}
+                          </div>
+                        ))}
+                      </PreviewSlot>
+                      <PreviewSlot label="Selling points" count={preview.enrichment_summary.selling_points.length}>
+                        {preview.enrichment_summary.selling_points.slice(0, 10).map((s, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "var(--text-2)", padding: "2px 0" }}>
+                            • {s.point}{s.mechanism && <span className="muted-sm" style={{ marginLeft: 4, fontSize: 11 }}>({s.mechanism})</span>}
+                          </div>
+                        ))}
+                      </PreviewSlot>
+                      <PreviewSlot label="Winning combos" count={preview.enrichment_summary.winner_combos.length}>
+                        {preview.enrichment_summary.winner_combos.slice(0, 6).map((w, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "var(--text-2)", padding: "2px 0" }}>
+                            • {w.combo}{w.performance && <span style={{ color: "var(--accent)", marginLeft: 4 }}>({w.performance})</span>}
+                          </div>
+                        ))}
+                      </PreviewSlot>
+                      <PreviewSlot label="Compliance gates" count={preview.enrichment_summary.compliance_gates.length}>
+                        {preview.enrichment_summary.compliance_gates.slice(0, 8).map((g, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "var(--text-2)", padding: "2px 0" }}>
+                            <span style={{ color: "var(--danger)", fontWeight: 600 }}>[{g.severity}]</span> avoid &ldquo;{g.pattern}&rdquo;
+                            {g.safer_alternative && <span className="muted-sm" style={{ marginLeft: 6, fontSize: 11 }}>→ &ldquo;{g.safer_alternative}&rdquo;</span>}
+                          </div>
+                        ))}
+                      </PreviewSlot>
+                      <PreviewSlot label="Archetype performance" count={preview.enrichment_summary.archetype_performance.length}>
+                        {preview.enrichment_summary.archetype_performance.slice(0, 6).map((a, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "var(--text-2)", padding: "2px 0" }}>
+                            • <strong>{a.archetype}</strong>{a.performance && <span style={{ color: "var(--accent)", marginLeft: 4 }}>({a.performance})</span>}
+                          </div>
+                        ))}
+                      </PreviewSlot>
+                      <div className="muted-sm" style={{ marginTop: 12, fontSize: 10, paddingTop: 8, borderTop: "1px dashed var(--border)" }}>
+                        Tool status: {Object.entries(preview.enrichment_summary.tool_status).map(([k, v]) => `${k}=${v}`).join(" · ")}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="muted-sm" style={{ margin: 0 }}>Connoisseur enrichment is OFF for this generation — nothing extra would be injected into the prompt.</p>
+                  )}
+                </div>
+              )}
+
+              {previewSection === "full" && (
+                <div style={{ padding: 14 }}>
+                  <p className="muted-sm" style={{ marginTop: 0, marginBottom: 8, fontSize: 11 }}>
+                    This is the EXACT prompt that would be sent to {`${"gemini-2.5-flash"}`}. The image_prompt + caption + hashtags Gemini returns then drive the gpt-image-2 render.
+                  </p>
+                  <pre
+                    className="mono"
+                    style={{
+                      margin: 0,
+                      padding: 12,
+                      background: "var(--bg)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 8,
+                      fontSize: 11,
+                      lineHeight: 1.5,
+                      color: "var(--text-2)",
+                      maxHeight: 460,
+                      overflow: "auto",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {preview.gemini_prompt}
+                  </pre>
+                  <div className="row" style={{ marginTop: 8, gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn-ghost btn-sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(preview.gemini_prompt).then(
+                          () => toast.success("Prompt copied", "Paste into any LLM scratchpad."),
+                          () => toast.error("Copy failed", "Select manually instead."),
+                        );
+                      }}
+                    >
+                      <Copy size={12} /> Copy prompt
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </form>
       </div>
 
@@ -509,5 +710,29 @@ export default function InstagramPage() {
         onChange={setEnrichmentOverride}
       />
     </div>
+  );
+}
+
+// Small collapsible-section helper used inside the preview panel.
+// Renders a header with the section name + item count, and only shows
+// the children when count > 0 (zero-count sections stay collapsed to
+// keep the panel scannable).
+function PreviewSlot({ label, count, children }: { label: string; count: number; children: React.ReactNode }) {
+  if (count === 0) {
+    return (
+      <div style={{ padding: "6px 0", borderBottom: "1px dashed var(--border)" }}>
+        <span className="eyebrow" style={{ fontSize: 10 }}>{label}</span>
+        <span className="muted-sm" style={{ marginLeft: 8, fontSize: 11 }}>none</span>
+      </div>
+    );
+  }
+  return (
+    <details open style={{ padding: "8px 0", borderBottom: "1px dashed var(--border)" }}>
+      <summary style={{ cursor: "pointer", padding: "2px 0" }}>
+        <span className="eyebrow" style={{ fontSize: 10 }}>{label}</span>
+        <span style={{ marginLeft: 8, color: "var(--accent)", fontSize: 11, fontWeight: 600 }}>{count}</span>
+      </summary>
+      <div style={{ marginTop: 6, marginLeft: 4 }}>{children}</div>
+    </details>
   );
 }
