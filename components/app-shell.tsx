@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileVideo2, Users, Package, Send, Settings, Activity, Presentation, ScrollText } from "lucide-react";
+import { LayoutDashboard, FileVideo2, Users, Package, Send, Settings, Activity, Presentation, ScrollText, BookOpen, Camera } from "lucide-react";
 
 type Usage = { storyboard: number; frame_image: number; video_render: number; estimated_cost_usd: number };
 type Health = { commit_sha: string | null; db: { reachable: boolean; brief_count: number | null } };
@@ -14,6 +14,8 @@ const NAV: Array<{ section?: string; items: { href: string; label: string; icon:
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
       { href: "/briefs", label: "Briefs", icon: FileVideo2 },
       { href: "/scripts", label: "Scripts", icon: ScrollText },
+      { href: "/instagram", label: "Instagram", icon: Camera },
+      { href: "/research", label: "Research", icon: BookOpen },
       { href: "/creators", label: "Creators", icon: Users },
       { href: "/products", label: "Products", icon: Package },
     ],
@@ -71,8 +73,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app-shell">
       <aside className="sidebar">
         <Link href="/" className="sidebar-brand" style={{ textDecoration: "none", color: "inherit" }}>
-          <span className="sidebar-brand-mark">M</span>
-          <span className="sidebar-brand-name">Mosaic Engine</span>
+          <span className="sidebar-brand-mark" aria-hidden>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 3c-4.97 0-9 3.358-9 7.5 0 1.105.895 2 2 2h14c1.105 0 2-.895 2-2C21 6.358 16.97 3 12 3z" fill="currentColor"/>
+              <path d="M9.5 12.5h5v6a2.5 2.5 0 0 1-5 0v-6z" fill="currentColor" opacity="0.85"/>
+              <circle cx="8.5" cy="8" r="1" fill="#07050c" opacity="0.55"/>
+              <circle cx="13.5" cy="7" r="0.7" fill="#07050c" opacity="0.55"/>
+              <circle cx="16" cy="9.5" r="0.8" fill="#07050c" opacity="0.55"/>
+            </svg>
+          </span>
+          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
+            <span className="sidebar-brand-name">Shroom</span>
+            <span className="sidebar-brand-tag">creative engine</span>
+          </span>
         </Link>
         {NAV.map((group, gi) => (
           <div key={gi}>
