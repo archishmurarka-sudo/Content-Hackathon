@@ -5,6 +5,7 @@ import { ArrowRight, FileText, Sparkles, Package, Beaker } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
+import { readResearchPicks, clearResearchPicks } from "@/lib/research-picks";
 
 type Product = {
   id: string;
@@ -111,6 +112,17 @@ export default function ScriptsPage() {
   // Connoisseur priority panel state — opens via the toggle's Customize chip.
   const [panelOpen, setPanelOpen] = useState(false);
   const [enrichmentOverride, setEnrichmentOverride] = useState<EnrichmentOverride | null>(null);
+  // Research → Scripts handoff: when the operator picked items in /research
+  // and clicked "Use in Scripts", they're sitting in localStorage. Hydrate
+  // the override on mount and show a banner so the operator knows.
+  const [picksFromResearch, setPicksFromResearch] = useState<{ brand_slug: string; total_picked: number } | null>(null);
+  useEffect(() => {
+    const picks = readResearchPicks();
+    if (picks) {
+      setEnrichmentOverride(picks.enrichment_override as EnrichmentOverride);
+      setPicksFromResearch({ brand_slug: picks.brand_slug, total_picked: picks.total_picked });
+    }
+  }, []);
   const totalPicked = enrichmentOverride
     ? enrichmentOverride.voice_atoms.length + enrichmentOverride.selling_points.length +
       enrichmentOverride.winner_combos.length + enrichmentOverride.compliance_gates.length +
@@ -326,6 +338,35 @@ export default function ScriptsPage() {
           </p>
         </div>
       </div>
+
+      {picksFromResearch && (
+        <div
+          className="card"
+          style={{
+            padding: "10px 14px",
+            marginBottom: 16,
+            background: "var(--accent-soft, rgba(108,76,181,0.14))",
+            borderColor: "var(--accent)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ fontSize: 13 }}>
+            🍄 Using <strong>{picksFromResearch.total_picked}</strong> picks from Research · brand <code>{picksFromResearch.brand_slug}</code>
+            <span className="muted-sm" style={{ marginLeft: 8, fontSize: 11 }}>(will apply to the next generate)</span>
+          </div>
+          <button
+            onClick={() => { clearResearchPicks(); setEnrichmentOverride(null); setPicksFromResearch(null); toast.success("Cleared Research picks", "Next generate will use the live MCP fetch."); }}
+            className="btn-ghost btn-sm"
+            style={{ fontSize: 11 }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Product picker */}
       <div className="card" style={{ padding: 0, marginBottom: 20, overflow: "hidden" }}>

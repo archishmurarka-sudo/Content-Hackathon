@@ -9,6 +9,7 @@ import { useToast } from "@/components/toast";
 import { BrandContextPanel } from "@/components/brand-context-panel";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
+import { readResearchPicks, clearResearchPicks } from "@/lib/research-picks";
 import type { BrandContext } from "@/lib/brand-context";
 
 type Product = { id: string; name: string; brand: string; one_liner?: string; hero_image_url?: string | null };
@@ -86,6 +87,16 @@ export default function InstagramPage() {
       enrichmentOverride.winner_combos.length + enrichmentOverride.compliance_gates.length +
       enrichmentOverride.archetype_performance.length
     : null;
+  // Research → Instagram handoff (see /research → "Use in Instagram"). Hydrate
+  // the override on mount and show a clearable banner.
+  const [picksFromResearch, setPicksFromResearch] = useState<{ brand_slug: string; total_picked: number } | null>(null);
+  useEffect(() => {
+    const picks = readResearchPicks();
+    if (picks) {
+      setEnrichmentOverride(picks.enrichment_override as EnrichmentOverride);
+      setPicksFromResearch({ brand_slug: picks.brand_slug, total_picked: picks.total_picked });
+    }
+  }, []);
 
   useEffect(() => {
     if (!productId) return;
@@ -202,6 +213,35 @@ export default function InstagramPage() {
         </div>
         <Link href="/" className="muted-sm" style={{ fontSize: 13 }}>← back to dashboard</Link>
       </div>
+
+      {picksFromResearch && (
+        <div
+          className="card"
+          style={{
+            padding: "10px 14px",
+            marginBottom: 16,
+            background: "var(--accent-soft, rgba(108,76,181,0.14))",
+            borderColor: "var(--accent)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ fontSize: 13 }}>
+            🍄 Using <strong>{picksFromResearch.total_picked}</strong> picks from Research · brand <code>{picksFromResearch.brand_slug}</code>
+            <span className="muted-sm" style={{ marginLeft: 8, fontSize: 11 }}>(will apply to the next generate)</span>
+          </div>
+          <button
+            onClick={() => { clearResearchPicks(); setEnrichmentOverride(null); setPicksFromResearch(null); toast.success("Cleared Research picks", "Next generate will use the live MCP fetch."); }}
+            className="btn-ghost btn-sm"
+            style={{ fontSize: 11 }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 28 }}>
         <span className="eyebrow">New post</span>

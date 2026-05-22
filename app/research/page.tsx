@@ -1,437 +1,448 @@
 "use client";
 
-// /research — operator console for the Connoisseur MCP. Lists all tools the
-// server exposes, lets you pick one, fills in args via a generated form (or
-// raw JSON for complex schemas), and shows the response.
+// /research — passive corpus viewer (NOT a tool runner).
 //
-// This is the standalone surface. The same MCP client (lib/connoisseur.ts) is
-// also called server-side from the Scripts and Briefs generators to enrich
-// their prompts — see those routes for the embedded usage.
+// Loads the full Connoisseur enrichment bundle for a brand (voice atoms +
+// selling points + winner combos + compliance gates + archetype performance)
+// and synthesises it into scannable cards.
+//
+// Operator can:
+//   1. Switch brand to compare AshwaMag vs Cymbiotika vs Codeage etc.
+//   2. Read the corpus directly — no "run a tool" workflow.
+//   3. Tick items to build a "picks" basket.
+//   4. Send the picks to the Scripts or Instagram surface as the prefilled
+//      enrichment_override (via localStorage — the target page hydrates it
+//      on mount and shows a "using picks from Research" banner).
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Play, Search, AlertCircle, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, FileImage, ScrollText, ArrowRight, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/toast";
 
-type Tool = {
-  name: string;
-  description?: string;
-  inputSchema?: {
-    type?: string;
-    properties?: Record<string, any>;
-    required?: string[];
-  };
+type Brand = { brand_slug: string; display_name: string; n_ads: number; is_self: boolean };
+
+type VoiceAtom = { atom_id?: number; phrase: string; category?: string | null; approved?: boolean | null };
+type SellingPoint = { point: string; mechanism?: string | null; source?: string | null };
+type WinnerCombo = { combo: string; evidence?: string | null; performance?: string | null };
+type ComplianceGate = { pattern: string; severity: string; gate_type?: string | null; safer_alternative?: string | null; rationale?: string | null };
+type ArchetypePerf = { archetype: string; performance?: string | null; notes?: string | null };
+
+type Preview = {
+  brand_slug: string;
+  voice_atoms: VoiceAtom[];
+  selling_points: SellingPoint[];
+  winner_combos: WinnerCombo[];
+  compliance_gates: ComplianceGate[];
+  archetype_performance: ArchetypePerf[];
+  tool_status?: Record<string, string>;
 };
 
-type CallResult = {
-  json?: any;
-  text?: string;
-  isError?: boolean;
-  error?: string;
-};
-
-// Loose grouping by tool-name prefix so the operator can scan 30 tools fast.
-// Reddit-sourced consumer language tends to live behind `text_search`,
-// `get_voice_atoms`, and the production-brief tools.
-const GROUPS: { label: string; match: (name: string) => boolean }[] = [
-  { label: "Reddit / voice / consumer language", match: (n) => /voice_atom|text_search|selling_points/.test(n) },
-  { label: "Portfolio queries", match: (n) => /^(list|get|count)_ad|list_brands|list_static/.test(n) },
-  { label: "Performance + concentration", match: (n) => /pattern_|concentration|tried_vs|tenure/.test(n) },
-  { label: "Decision aids", match: (n) => /winners|losers|similar_prior|pre_ship/.test(n) },
-  { label: "Image analysis", match: (n) => /image|describe_ad/.test(n) },
-  { label: "Behavioral spine", match: (n) => /protocol|decision|investigate_peer|current_state/.test(n) },
-  { label: "Production briefing", match: (n) => /archetype_performance|winner_combos|compliance|generate_production/.test(n) },
-];
-
-function groupOf(name: string): string {
-  return GROUPS.find((g) => g.match(name))?.label ?? "Other";
-}
+// localStorage key for picks → cross-page handoff to Scripts / Instagram.
+// Versioned so older selections don't crash newer schemas.
+export const PICKS_STORAGE_KEY = "connoisseur_research_picks_v1";
 
 export default function ResearchPage() {
   const toast = useToast();
-  const [tools, setTools] = useState<Tool[]>([]);
-  const [loadingTools, setLoadingTools] = useState(true);
-  const [serverUrl, setServerUrl] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [argsText, setArgsText] = useState<string>("{}");
-  const [argsForm, setArgsForm] = useState<Record<string, any>>({});
-  const [useRawJson, setUseRawJson] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<CallResult | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brandSlug, setBrandSlug] = useState("ashwamag");
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Per-category sets of picked item keys.
+  const [picked, setPicked] = useState<Record<string, Set<string>>>({
+    voice_atoms: new Set(),
+    selling_points: new Set(),
+    winner_combos: new Set(),
+    compliance_gates: new Set(),
+    archetype_performance: new Set(),
+  });
+
+  // Load brands once on mount.
   useEffect(() => {
-    fetch("/api/connoisseur/tools", { cache: "no-store" })
+    fetch("/api/connoisseur/brands", { cache: "no-store" })
       .then((r) => r.json())
-      .then((data) => {
-        if (data?.error) {
-          toast.error(data.error);
-          return;
-        }
-        setTools(data.tools ?? []);
-        setServerUrl(data.server_url ?? null);
-      })
-      .catch((err) => toast.error(err?.message ?? "failed to load tools"))
-      .finally(() => setLoadingTools(false));
-  }, [toast]);
+      .then((d) => setBrands(d.brands ?? []))
+      .catch(() => {});
+  }, []);
 
-  const grouped = useMemo(() => {
-    const filtered = tools.filter(
-      (t) => !search.trim() || t.name.toLowerCase().includes(search.toLowerCase()) || (t.description ?? "").toLowerCase().includes(search.toLowerCase())
-    );
-    const buckets: Record<string, Tool[]> = {};
-    for (const t of filtered) {
-      const g = groupOf(t.name);
-      (buckets[g] ||= []).push(t);
-    }
-    return buckets;
-  }, [tools, search]);
-
-  const currentTool = tools.find((t) => t.name === selected) ?? null;
-
-  // When the operator picks a new tool, reset args (form + JSON) so a stale
-  // payload from the previous tool doesn't accidentally apply.
+  // Reload preview whenever brand changes.
   useEffect(() => {
-    if (!currentTool) return;
-    setArgsForm({});
-    setArgsText("{}");
-    setResult(null);
-  }, [currentTool?.name]);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/connoisseur/preview?brand_slug=${encodeURIComponent(brandSlug)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d?.error) { setError(d.error); setPreview(null); return; }
+        setPreview(d as Preview);
+        // Reset picks when brand changes — different corpora, different items.
+        setPicked({
+          voice_atoms: new Set(),
+          selling_points: new Set(),
+          winner_combos: new Set(),
+          compliance_gates: new Set(),
+          archetype_performance: new Set(),
+        });
+      })
+      .catch((e) => !cancelled && setError(e?.message ?? "preview failed"))
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [brandSlug]);
 
-  async function runTool() {
-    if (!currentTool) return;
-    setRunning(true);
-    setResult(null);
-    try {
-      let argsPayload: any = {};
-      if (useRawJson) {
-        try { argsPayload = argsText.trim() ? JSON.parse(argsText) : {}; }
-        catch (e: any) { toast.error("invalid JSON in args"); setRunning(false); return; }
-      } else {
-        // Strip empty string / null values so we don't override server defaults.
-        argsPayload = Object.fromEntries(
-          Object.entries(argsForm).filter(([_, v]) => v !== "" && v !== null && v !== undefined),
-        );
-      }
-      const res = await fetch("/api/connoisseur/call", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: currentTool.name, arguments: argsPayload }),
-      });
-      const data = await res.json();
-      if (!res.ok || data?.error) {
-        setResult({ error: data?.error ?? `${res.status}`, isError: true });
-        toast.error(data?.error ?? `tool ${currentTool.name} failed`);
-      } else {
-        setResult({ json: data.json, text: data.text, isError: data.isError });
-      }
-    } catch (err: any) {
-      setResult({ error: err?.message ?? "request failed", isError: true });
-    } finally {
-      setRunning(false);
-    }
+  function togglePick(category: keyof typeof picked, key: string) {
+    setPicked((prev) => {
+      const next = new Set(prev[category]);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return { ...prev, [category]: next };
+    });
   }
 
+  function pickAllInCategory(category: keyof typeof picked, keys: string[]) {
+    setPicked((prev) => ({ ...prev, [category]: new Set(keys) }));
+  }
+
+  function clearAllPicks() {
+    setPicked({
+      voice_atoms: new Set(),
+      selling_points: new Set(),
+      winner_combos: new Set(),
+      compliance_gates: new Set(),
+      archetype_performance: new Set(),
+    });
+  }
+
+  const totalPicked = useMemo(
+    () => Object.values(picked).reduce((sum, s) => sum + s.size, 0),
+    [picked]
+  );
+
+  // Build the EnrichmentOverride-shape payload from the current picks, then
+  // stash in localStorage and route the operator to the target surface.
+  function sendPicksTo(target: "scripts" | "instagram") {
+    if (!preview) return;
+    if (totalPicked === 0) { toast.error("No picks selected", "Tick at least one item first."); return; }
+    const overrideBlob = {
+      brand_slug: preview.brand_slug,
+      voice_atoms: preview.voice_atoms.filter((x) => picked.voice_atoms.has(x.phrase)),
+      selling_points: preview.selling_points.filter((x) => picked.selling_points.has(x.point)),
+      winner_combos: preview.winner_combos.filter((x) => picked.winner_combos.has(x.combo)),
+      compliance_gates: preview.compliance_gates.filter((x) => picked.compliance_gates.has(x.pattern)),
+      archetype_performance: preview.archetype_performance.filter((x) => picked.archetype_performance.has(x.archetype)),
+      tool_status: preview.tool_status ?? {},
+    };
+    const payload = {
+      brand_slug: preview.brand_slug,
+      picked_at: Date.now(),
+      total_picked: totalPicked,
+      enrichment_override: overrideBlob,
+    };
+    try { localStorage.setItem(PICKS_STORAGE_KEY, JSON.stringify(payload)); } catch {}
+    toast.success(`Sent ${totalPicked} picks to ${target === "scripts" ? "Scripts" : "Instagram"}`, "The target page will use them on the next generate.");
+    window.location.href = target === "scripts" ? "/scripts" : "/instagram";
+  }
+
+  // Light synthesis helpers — show category counts + top items so the page
+  // tells the operator the SHAPE of the corpus before they read every row.
+  const voiceCategoryCounts = useMemo(() => {
+    if (!preview) return [];
+    const counts: Record<string, number> = {};
+    for (const v of preview.voice_atoms) {
+      const k = v.category || "uncategorised";
+      counts[k] = (counts[k] ?? 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [preview]);
+
+  const gateSeverityCounts = useMemo(() => {
+    if (!preview) return [];
+    const counts: Record<string, number> = {};
+    for (const g of preview.compliance_gates) {
+      const k = g.severity || "unknown";
+      counts[k] = (counts[k] ?? 0) + 1;
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [preview]);
+
+  const currentBrand = brands.find((b) => b.brand_slug === brandSlug);
+
   return (
-    <div style={{ padding: "20px 28px", maxWidth: 1400, margin: "0 auto" }}>
-      <header style={{ marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontFamily: "var(--font-fraunces)", fontSize: 28, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <BookOpen size={22} /> Research
-          </h1>
-          <p style={{ color: "var(--muted)", margin: "4px 0 0", fontSize: 13 }}>
-            Live queries against the Connoisseur MCP — 1,213 Meta ads, peer benchmarks, voice atoms, compliance gates, consumer language.
-          </p>
-        </div>
-        {serverUrl && (
-          <code style={{ fontSize: 11, color: "var(--muted-2)", maxWidth: "60ch", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {serverUrl}
-          </code>
-        )}
+    <div style={{ padding: "20px 28px", maxWidth: 1400, margin: "0 auto", paddingBottom: 100 }}>
+      <header style={{ marginBottom: 18 }}>
+        <h1 style={{ fontFamily: "var(--font-fraunces)", fontSize: 28, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+          <BookOpen size={22} /> Research
+        </h1>
+        <p style={{ color: "var(--muted)", margin: "4px 0 0", fontSize: 13 }}>
+          The Connoisseur corpus, brand by brand. Read it, pick what matters, send it as priority context into Scripts or Instagram.
+        </p>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 18, alignItems: "start" }}>
-        {/* Tool browser */}
-        <aside className="card" style={{ padding: 12, position: "sticky", top: 18, maxHeight: "calc(100vh - 36px)", overflow: "auto" }}>
-          <div style={{ position: "relative", marginBottom: 10 }}>
-            <Search size={14} style={{ position: "absolute", top: 9, left: 9, color: "var(--muted-2)" }} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={`Search ${tools.length} tools…`}
-              style={{ width: "100%", padding: "7px 8px 7px 28px", fontSize: 12, borderRadius: 6, border: "1px solid var(--line)", background: "var(--bg)" }}
-            />
-          </div>
-          {loadingTools && <div style={{ color: "var(--muted)", fontSize: 12 }}>loading tools…</div>}
-          {!loadingTools && Object.keys(grouped).length === 0 && <div style={{ color: "var(--muted)", fontSize: 12 }}>no tools match</div>}
-          {Object.entries(grouped).map(([group, items]) => (
-            <div key={group} style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--muted-2)", padding: "4px 6px" }}>{group}</div>
-              {items.map((t) => {
-                const active = selected === t.name;
-                return (
-                  <button
-                    key={t.name}
-                    onClick={() => setSelected(t.name)}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
-                      padding: "6px 8px", fontSize: 12, textAlign: "left",
-                      background: active ? "var(--accent-bg)" : "transparent",
-                      color: active ? "var(--accent)" : "var(--text)",
-                      border: "none", borderRadius: 5, cursor: "pointer",
-                      fontFamily: "ui-monospace, SFMono-Regular, monospace",
-                    }}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
-                    <ChevronRight size={12} style={{ opacity: active ? 1 : 0.3, flexShrink: 0 }} />
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </aside>
-
-        {/* Tool runner + result */}
-        <section>
-          {!currentTool ? (
-            <div className="card" style={{ padding: 28, color: "var(--muted)", textAlign: "center" }}>
-              Pick a tool from the left to run it.
-            </div>
-          ) : (
-            <>
-              <div className="card" style={{ padding: 16, marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
-                  <div>
-                    <code style={{ fontSize: 14, fontWeight: 600 }}>{currentTool.name}</code>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, whiteSpace: "pre-wrap" }}>
-                      {currentTool.description?.split("\n").slice(0, 4).join("\n") || "(no description)"}
-                    </div>
-                  </div>
-                  <button
-                    onClick={runTool}
-                    disabled={running}
-                    className="btn btn-primary"
-                    style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
-                  >
-                    <Play size={13} /> {running ? "Running…" : "Run"}
-                  </button>
-                </div>
-
-                {/* Args input — form OR raw JSON */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>Arguments</div>
-                  <label style={{ fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                    <input type="checkbox" checked={useRawJson} onChange={(e) => setUseRawJson(e.target.checked)} />
-                    raw JSON
-                  </label>
-                </div>
-                {useRawJson ? (
-                  <textarea
-                    value={argsText}
-                    onChange={(e) => setArgsText(e.target.value)}
-                    placeholder={JSON.stringify(exampleArgsFromSchema(currentTool.inputSchema), null, 2)}
-                    rows={8}
-                    spellCheck={false}
-                    style={{ width: "100%", fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12, padding: 10, borderRadius: 6, border: "1px solid var(--line)", background: "var(--bg)" }}
-                  />
-                ) : (
-                  <ArgForm
-                    schema={currentTool.inputSchema}
-                    values={argsForm}
-                    onChange={setArgsForm}
-                  />
-                )}
-              </div>
-
-              {result && <ResultView result={result} />}
-            </>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-// ── Schema-driven form ────────────────────────────────────────────────────
-// Connoisseur tool schemas commonly use `anyOf: [{type: "string"}, {type:"null"}]`
-// for nullable fields and `enum` arrays for closed choices. We unwrap both.
-
-function ArgForm({ schema, values, onChange }: { schema?: Tool["inputSchema"]; values: Record<string, any>; onChange: (v: Record<string, any>) => void }) {
-  const props = schema?.properties ?? {};
-  const required = new Set(schema?.required ?? []);
-  const keys = Object.keys(props);
-  if (keys.length === 0) {
-    return <div style={{ fontSize: 12, color: "var(--muted)", padding: 8 }}>This tool takes no arguments — just hit Run.</div>;
-  }
-  return (
-    <div style={{ display: "grid", gap: 8 }}>
-      {keys.map((k) => {
-        const def = props[k];
-        const baseType = inferBaseType(def);
-        const enumOptions = inferEnum(def);
-        const placeholder = def?.default !== undefined && def?.default !== null ? `default: ${JSON.stringify(def.default)}` : (def?.title ?? "");
-        const label = (
-          <label style={{ fontSize: 11, color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
-            <span><code style={{ fontSize: 11 }}>{k}</code> {required.has(k) && <span style={{ color: "var(--danger, #c33)" }}>*</span>} <span style={{ color: "var(--muted-2)" }}>· {baseType}{enumOptions ? " enum" : ""}</span></span>
-            {def?.description && <span style={{ color: "var(--muted-2)", textAlign: "right", maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={def.description}>{def.description}</span>}
-          </label>
-        );
-        return (
-          <div key={k}>
-            {label}
-            {enumOptions ? (
-              <select
-                value={values[k] ?? ""}
-                onChange={(e) => onChange({ ...values, [k]: e.target.value || undefined })}
-                style={{ width: "100%", padding: 6, fontSize: 12, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg)" }}
-              >
-                <option value="">— any —</option>
-                {enumOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            ) : baseType === "boolean" ? (
-              <select
-                value={values[k] === undefined ? "" : String(values[k])}
-                onChange={(e) => onChange({ ...values, [k]: e.target.value === "" ? undefined : e.target.value === "true" })}
-                style={{ width: "100%", padding: 6, fontSize: 12, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg)" }}
-              >
-                <option value="">— null —</option>
-                <option value="true">true</option>
-                <option value="false">false</option>
-              </select>
-            ) : baseType === "number" || baseType === "integer" ? (
-              <input
-                type="number"
-                value={values[k] ?? ""}
-                placeholder={placeholder}
-                onChange={(e) => onChange({ ...values, [k]: e.target.value === "" ? undefined : Number(e.target.value) })}
-                style={{ width: "100%", padding: 6, fontSize: 12, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg)" }}
-              />
-            ) : baseType === "object" || baseType === "array" ? (
-              <textarea
-                value={typeof values[k] === "string" ? values[k] : (values[k] === undefined ? "" : JSON.stringify(values[k]))}
-                placeholder={`JSON ${baseType}`}
-                rows={3}
-                spellCheck={false}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  try { onChange({ ...values, [k]: v === "" ? undefined : JSON.parse(v) }); }
-                  catch { onChange({ ...values, [k]: v }); /* keep raw string until valid */ }
-                }}
-                style={{ width: "100%", fontFamily: "ui-monospace, SFMono-Regular, monospace", padding: 6, fontSize: 11, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg)" }}
-              />
-            ) : (
-              <input
-                value={values[k] ?? ""}
-                placeholder={placeholder}
-                onChange={(e) => onChange({ ...values, [k]: e.target.value || undefined })}
-                style={{ width: "100%", padding: 6, fontSize: 12, borderRadius: 5, border: "1px solid var(--line)", background: "var(--bg)" }}
-              />
+      {/* Brand picker + stats */}
+      <div className="card" style={{ padding: 14, marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--muted)" }}>
+          Brand corpus
+          <select
+            value={brandSlug}
+            onChange={(e) => setBrandSlug(e.target.value)}
+            style={{ padding: "7px 12px", fontSize: 13, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--text)", minWidth: 260 }}
+          >
+            {brands.length === 0 && <option value={brandSlug}>{brandSlug}</option>}
+            {brands.map((b) => (
+              <option key={b.brand_slug} value={b.brand_slug}>
+                {b.display_name}{b.is_self ? " ★" : ""} · {b.n_ads} ads
+              </option>
+            ))}
+          </select>
+        </label>
+        {currentBrand && (
+          <div className="row" style={{ gap: 8 }}>
+            {currentBrand.is_self && (
+              <span className="badge" style={{ background: "var(--accent-soft)", color: "var(--accent)", borderColor: "var(--accent)" }}>
+                ★ self brand
+              </span>
             )}
+            <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)" }}>
+              {currentBrand.n_ads} ads in corpus
+            </span>
           </div>
-        );
-      })}
+        )}
+        <button
+          onClick={() => setBrandSlug((s) => s)}
+          disabled={loading}
+          className="btn-ghost btn-sm"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <RefreshCw size={12} className={loading ? "spin" : ""} />
+          {loading ? "Loading…" : "Reload"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="card" style={{ padding: 14, borderColor: "var(--danger)", color: "var(--danger)", marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {/* Synthesis row — counts + top distributions */}
+      {preview && (
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 18 }}>
+          <SynthCard label="Voice atoms" count={preview.voice_atoms.length} status={preview.tool_status?.get_voice_atoms} />
+          <SynthCard label="Selling points" count={preview.selling_points.length} status={preview.tool_status?.get_selling_points} />
+          <SynthCard label="Winner combos" count={preview.winner_combos.length} status={preview.tool_status?.get_winner_combos} />
+          <SynthCard label="Compliance gates" count={preview.compliance_gates.length} status={preview.tool_status?.get_compliance_gates} subtitle={gateSeverityCounts.map(([s, n]) => `${n} ${s}`).join(" · ")} />
+          <SynthCard label="Archetype performance" count={preview.archetype_performance.length} status={preview.tool_status?.get_archetype_performance} />
+        </div>
+      )}
+
+      {/* Voice atom category distribution */}
+      {voiceCategoryCounts.length > 0 && (
+        <div className="card" style={{ padding: 14, marginBottom: 18 }}>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>Voice atoms by category</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {voiceCategoryCounts.map(([cat, n]) => (
+              <span key={cat} className="badge" style={{ fontSize: 11 }}>
+                {cat} · <strong>{n}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Detail sections */}
+      {preview && (
+        <div className="col" style={{ gap: 16 }}>
+          <Section
+            title="Consumer voice atoms"
+            subtitle="Reddit + Amazon sourced phrases. The cadence prompts mirror in scripts."
+            items={preview.voice_atoms.map((x) => ({
+              key: x.phrase,
+              primary: x.phrase,
+              secondary: x.category ?? null,
+            }))}
+            picked={picked.voice_atoms}
+            onToggle={(k) => togglePick("voice_atoms", k)}
+            onAll={() => pickAllInCategory("voice_atoms", preview.voice_atoms.map((x) => x.phrase))}
+          />
+          <Section
+            title="Selling points"
+            subtitle="Mechanism language verified for this brand. Each anchored to an ingredient."
+            items={preview.selling_points.map((x) => ({
+              key: x.point,
+              primary: x.point,
+              secondary: x.mechanism ?? null,
+            }))}
+            picked={picked.selling_points}
+            onToggle={(k) => togglePick("selling_points", k)}
+            onAll={() => pickAllInCategory("selling_points", preview.selling_points.map((x) => x.point))}
+          />
+          <Section
+            title="Winner combos"
+            subtitle="Pattern combinations that have driven tenure-leading ads (avg GMV labelled)."
+            items={preview.winner_combos.map((x) => ({
+              key: x.combo,
+              primary: x.combo,
+              secondary: x.performance ?? null,
+              tertiary: x.evidence ?? null,
+            }))}
+            picked={picked.winner_combos}
+            onToggle={(k) => togglePick("winner_combos", k)}
+            onAll={() => pickAllInCategory("winner_combos", preview.winner_combos.map((x) => x.combo))}
+          />
+          <Section
+            title="Compliance gates"
+            subtitle="Banned phrases with safer alternatives. Surfaced to the model as hard rules."
+            items={preview.compliance_gates.map((x) => ({
+              key: x.pattern,
+              primary: `avoid "${x.pattern}"`,
+              secondary: x.safer_alternative ? `→ "${x.safer_alternative}"` : null,
+              tertiary: x.rationale ?? null,
+              severity: x.severity,
+            }))}
+            picked={picked.compliance_gates}
+            onToggle={(k) => togglePick("compliance_gates", k)}
+            onAll={() => pickAllInCategory("compliance_gates", preview.compliance_gates.map((x) => x.pattern))}
+          />
+          <Section
+            title="Archetype performance"
+            subtitle="Which creator archetypes lift for this brand."
+            items={preview.archetype_performance.map((x) => ({
+              key: x.archetype,
+              primary: x.archetype,
+              secondary: x.performance ?? null,
+              tertiary: x.notes ?? null,
+            }))}
+            picked={picked.archetype_performance}
+            onToggle={(k) => togglePick("archetype_performance", k)}
+            onAll={() => pickAllInCategory("archetype_performance", preview.archetype_performance.map((x) => x.archetype))}
+          />
+        </div>
+      )}
+
+      {/* Sticky picks bar */}
+      {totalPicked > 0 && (
+        <div
+          style={{
+            position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
+            background: "var(--surface)", borderTop: "1px solid var(--border)",
+            padding: "12px 28px", display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 16, flexWrap: "wrap", boxShadow: "0 -6px 24px rgba(0,0,0,0.25)",
+          }}
+        >
+          <div style={{ fontSize: 13 }}>
+            <strong style={{ color: "var(--accent)" }}>{totalPicked}</strong> picks · brand <code>{brandSlug}</code>
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <button onClick={clearAllPicks} className="btn-ghost btn-sm">Clear</button>
+            <button
+              onClick={() => sendPicksTo("scripts")}
+              className="btn btn-primary btn-sm"
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <ScrollText size={13} /> Use in Scripts <ArrowRight size={12} />
+            </button>
+            <button
+              onClick={() => sendPicksTo("instagram")}
+              className="btn btn-primary btn-sm"
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <FileImage size={13} /> Use in Instagram <ArrowRight size={12} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function inferBaseType(def: any): string {
-  if (!def) return "string";
-  if (def.type && def.type !== "null") return def.type;
-  if (Array.isArray(def.anyOf)) {
-    const nonNull = def.anyOf.find((d: any) => d.type && d.type !== "null");
-    if (nonNull?.type) return nonNull.type;
-  }
-  if (def.enum) return "string";
-  return "string";
+function SynthCard({ label, count, status, subtitle }: { label: string; count: number; status?: string; subtitle?: string }) {
+  const ok = status === "ok";
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div className="eyebrow">{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 600, marginTop: 4, fontFamily: "var(--font-fraunces)" }}>{count}</div>
+      {subtitle && <div className="muted-sm" style={{ marginTop: 4, fontSize: 11 }}>{subtitle}</div>}
+      {status && !ok && (
+        <div className="muted-sm" style={{ marginTop: 4, fontSize: 10, color: "var(--muted-2)" }}>tool: {status}</div>
+      )}
+    </div>
+  );
 }
 
-function inferEnum(def: any): string[] | null {
-  if (Array.isArray(def?.enum)) return def.enum.map(String);
-  if (Array.isArray(def?.anyOf)) {
-    const enumDef = def.anyOf.find((d: any) => Array.isArray(d.enum));
-    if (enumDef?.enum) return enumDef.enum.map(String);
-  }
-  return null;
-}
+type SectionItem = { key: string; primary: string; secondary?: string | null; tertiary?: string | null; severity?: string };
 
-function exampleArgsFromSchema(schema?: Tool["inputSchema"]): Record<string, any> {
-  const props = schema?.properties ?? {};
-  const ex: Record<string, any> = {};
-  for (const [k, def] of Object.entries(props)) {
-    if ((def as any).default !== undefined) ex[k] = (def as any).default;
-  }
-  return ex;
-}
-
-// ── Result rendering ──────────────────────────────────────────────────────
-
-function ResultView({ result }: { result: CallResult }) {
-  if (result.isError || result.error) {
+function Section({
+  title, subtitle, items, picked, onToggle, onAll,
+}: {
+  title: string;
+  subtitle: string;
+  items: SectionItem[];
+  picked: Set<string>;
+  onToggle: (key: string) => void;
+  onAll: () => void;
+}) {
+  const pickedCount = items.filter((i) => picked.has(i.key)).length;
+  if (items.length === 0) {
     return (
-      <div className="card" style={{ padding: 14, borderColor: "var(--danger, #c33)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--danger, #c33)", fontSize: 13, marginBottom: 6 }}>
-          <AlertCircle size={14} /> Tool error
-        </div>
-        <pre style={{ fontSize: 12, whiteSpace: "pre-wrap", margin: 0 }}>{result.error || result.text || JSON.stringify(result.json, null, 2)}</pre>
-      </div>
-    );
-  }
-  const j = result.json;
-  // Array-of-objects → table view; otherwise pretty-printed JSON.
-  if (Array.isArray(j) && j.length > 0 && typeof j[0] === "object" && j[0] !== null) {
-    const cols = uniqueKeys(j).slice(0, 10);
-    return (
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--muted)", borderBottom: "1px solid var(--line)" }}>
-          {j.length} rows · {cols.length} cols shown
-        </div>
-        <div style={{ overflowX: "auto", maxHeight: 480 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: "var(--bg-2)", position: "sticky", top: 0 }}>
-                {cols.map((c) => (
-                  <th key={c} style={{ textAlign: "left", padding: "8px 10px", borderBottom: "1px solid var(--line)", color: "var(--muted)", fontWeight: 600, whiteSpace: "nowrap" }}>{c}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {j.slice(0, 200).map((row, i) => (
-                <tr key={i} style={{ borderBottom: "1px solid var(--line)" }}>
-                  {cols.map((c) => (
-                    <td key={c} style={{ padding: "6px 10px", verticalAlign: "top", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={String((row as any)[c] ?? "")}>
-                      {renderCell((row as any)[c])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <details style={{ borderTop: "1px solid var(--line)" }}>
-          <summary style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>Raw JSON</summary>
-          <pre style={{ margin: 0, padding: 14, fontSize: 11, maxHeight: 400, overflow: "auto" }}>{JSON.stringify(j, null, 2)}</pre>
-        </details>
+      <div className="card" style={{ padding: 14 }}>
+        <div className="eyebrow">{title}</div>
+        <p className="muted-sm" style={{ marginTop: 6 }}>No items for this brand.</p>
       </div>
     );
   }
   return (
     <div className="card" style={{ padding: 14 }}>
-      <pre style={{ margin: 0, fontSize: 12, whiteSpace: "pre-wrap", overflowX: "auto", maxHeight: 560 }}>
-        {j !== undefined && j !== null ? JSON.stringify(j, null, 2) : (result.text || "(no content)")}
-      </pre>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+        <div>
+          <div className="eyebrow">{title}</div>
+          <p className="muted-sm" style={{ marginTop: 4 }}>{subtitle}</p>
+        </div>
+        <div className="row" style={{ gap: 6, alignItems: "center" }}>
+          <span className="muted-sm" style={{ fontSize: 11 }}>{pickedCount} / {items.length} picked</span>
+          <button onClick={onAll} className="btn-ghost btn-sm" style={{ fontSize: 11, padding: "3px 10px" }}>Pick all</button>
+        </div>
+      </div>
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4, maxHeight: 380, overflowY: "auto" }}>
+        {items.map((it) => {
+          const isPicked = picked.has(it.key);
+          return (
+            <label
+              key={it.key}
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 10px",
+                borderRadius: 6, cursor: "pointer", fontSize: 13,
+                background: isPicked ? "var(--accent-soft, rgba(108,76,181,0.12))" : "transparent",
+                color: isPicked ? "var(--text)" : "var(--text-2)",
+                border: `1px solid ${isPicked ? "var(--accent)" : "transparent"}`,
+                transition: "background 100ms, border-color 100ms",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isPicked}
+                onChange={() => onToggle(it.key)}
+                style={{ marginTop: 3, flexShrink: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: isPicked ? 500 : 400 }}>
+                  {it.severity && (
+                    <span style={{ fontSize: 10, fontWeight: 600, color: it.severity === "block" ? "var(--danger)" : "var(--muted)", marginRight: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      [{it.severity}]
+                    </span>
+                  )}
+                  {it.primary}
+                </div>
+                {it.secondary && (
+                  <div className="muted-sm" style={{ marginTop: 2, fontSize: 12 }}>{it.secondary}</div>
+                )}
+                {it.tertiary && (
+                  <div className="muted-sm" style={{ marginTop: 2, fontSize: 11, color: "var(--muted-2)" }}>{it.tertiary}</div>
+                )}
+              </div>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
-}
-
-function uniqueKeys(rows: any[]): string[] {
-  const seen = new Set<string>();
-  for (const r of rows.slice(0, 50)) {
-    if (r && typeof r === "object") for (const k of Object.keys(r)) seen.add(k);
-  }
-  return Array.from(seen);
-}
-
-function renderCell(v: any): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
 }
