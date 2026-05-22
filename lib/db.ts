@@ -106,20 +106,52 @@ export async function ensureSchema(): Promise<void> {
     // CSV row per Noa's template).
     await s`
       CREATE TABLE IF NOT EXISTS ad_scripts (
-        id          TEXT PRIMARY KEY,
-        product_id  TEXT NOT NULL,
-        batch_id    TEXT NOT NULL,
-        script_kind TEXT NOT NULL,
-        style       TEXT,
-        placement   TEXT,
-        source_ref  TEXT,
-        script_csv  JSONB NOT NULL,
-        approved    BOOLEAN DEFAULT FALSE,
-        created_at  BIGINT NOT NULL
+        id           TEXT PRIMARY KEY,
+        product_id   TEXT NOT NULL,
+        batch_id     TEXT NOT NULL,
+        script_kind  TEXT NOT NULL,
+        style        TEXT,
+        placement    TEXT,
+        source_ref   TEXT,
+        script_csv   JSONB NOT NULL,
+        approved     BOOLEAN DEFAULT FALSE,
+        image_status TEXT,
+        image_url    TEXT,
+        image_key    TEXT,
+        image_prompt TEXT,
+        image_error  TEXT,
+        created_at   BIGINT NOT NULL
       );
     `;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_status TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_url TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_key TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_prompt TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_error TEXT;`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_product_idx ON ad_scripts (product_id, created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_batch_idx ON ad_scripts (batch_id);`;
+
+    // Instagram branded-content posts. Owned-channel content (not creator
+    // UGC) — single hero image + caption + hashtags per row.
+    await s`
+      CREATE TABLE IF NOT EXISTS ig_posts (
+        id           TEXT PRIMARY KEY,
+        product_id   TEXT NOT NULL,
+        format       TEXT NOT NULL,
+        theme        TEXT NOT NULL,
+        vibe         TEXT,
+        image_status TEXT NOT NULL,
+        image_url    TEXT,
+        image_key    TEXT,
+        image_prompt TEXT,
+        caption      TEXT,
+        hashtags     JSONB,
+        error        TEXT,
+        created_at   BIGINT NOT NULL
+      );
+    `;
+    await s`CREATE INDEX IF NOT EXISTS ig_posts_created_at_idx ON ig_posts (created_at DESC);`;
+    await s`CREATE INDEX IF NOT EXISTS ig_posts_product_idx ON ig_posts (product_id, created_at DESC);`;
   })();
   return g.__schemaReady;
 }

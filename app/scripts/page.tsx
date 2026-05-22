@@ -40,6 +40,10 @@ type AdScript = {
   source_ref: string | null;
   script_csv: Record<string, string>;
   approved: boolean;
+  image_status?: "idle" | "pending" | "ready" | "failed";
+  image_url?: string | null;
+  image_prompt?: string | null;
+  image_error?: string | null;
   created_at: number;
 };
 
@@ -69,6 +73,8 @@ export default function ScriptsPage() {
   const [competitorRefs, setCompetitorRefs] = useState("");
   const [extraNotes, setExtraNotes] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [batchImaging, setBatchImaging] = useState(false);
+  const [perScriptImaging, setPerScriptImaging] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch("/api/products", { cache: "no-store" })
@@ -160,6 +166,69 @@ export default function ScriptsPage() {
     if (!selectedProductId) return;
     const url = `/api/scripts/export?product_id=${encodeURIComponent(selectedProductId)}${onlyApproved ? "&only_approved=1" : ""}`;
     window.location.href = url;
+  }
+
+  // While any image is pending, poll every 4s so the UI catches up.
+  useEffect(() => {
+    const pending = scripts.some((s) => s.image_status === "pending");
+    if (!pending) return;
+    const t = setInterval(() => {
+      refreshScripts();
+    }, 4000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scripts]);
+
+  async function refreshScripts() {
+    if (!selectedProductId) return;
+    const r = await fetch(`/api/scripts?product_id=${encodeURIComponent(selectedProductId)}`, { cache: "no-store" });
+    if (!r.ok) return;
+    const d = await r.json();
+    setScripts(d.scripts ?? []);
+  }
+
+  async function generateOneImage(id: string) {
+    setPerScriptImaging((m) => ({ ...m, [id]: true }));
+    // Optimistic — flip the local row to pending so the UI shows a spinner.
+    setScripts((prev) => prev.map((s) => (s.id === id ? { ...s, image_status: "pending", image_error: null } : s)));
+    const res = await fetch(`/api/scripts/${encodeURIComponent(id)}/image`, { method: "POST" });
+    setPerScriptImaging((m) => ({ ...m, [id]: false }));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error("Image generation failed", data?.error ?? `HTTP ${res.status}`);
+    }
+    refreshScripts();
+  }
+
+  async function generateAllImages(onlyApproved: boolean) {
+    if (!selectedProductId) return;
+    const eligible = scripts.filter((s) => (!onlyApproved || s.approved) && s.image_status !== "ready");
+    if (eligible.length === 0) {
+      toast.error("Nothing to generate", "All eligible scripts already have images. Use Re-render on a row to force a redo.");
+      return;
+    }
+    const cost = (eligible.length * 0.042).toFixed(2);
+    if (!confirm(`Generate ${eligible.length} image${eligible.length === 1 ? "" : "s"} via OpenAI gpt-image-2 (~$${cost})?`)) return;
+    setBatchImaging(true);
+    // Optimistic — flip everything to pending up front.
+    setScripts((prev) =>
+      prev.map((s) =>
+        eligible.find((e) => e.id === s.id) ? { ...s, image_status: "pending", image_error: null } : s
+      )
+    );
+    const res = await fetch("/api/scripts/batch-images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: selectedProductId, only_approved: onlyApproved }),
+    });
+    setBatchImaging(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error("Batch image generation failed", data?.error ?? `HTTP ${res.status}`);
+    } else {
+      toast.success(`Generated ${data?.succeeded ?? 0} images`, data?.failed ? `${data.failed} failed` : "All done");
+    }
+    refreshScripts();
   }
 
   return (
@@ -396,7 +465,14 @@ export default function ScriptsPage() {
                 <h2 style={{ marginTop: 4 }}>Scripts for {selectedProduct?.name} <span className="muted-sm" style={{ fontWeight: 400 }}>· {scripts.length} total</span></h2>
               </div>
               {scripts.length > 0 && (
-                <div className="row" style={{ gap: 8 }}>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => generateAllImages(false)}
+                    disabled={batchImaging}
+                    title="Generate static ad images for every script via OpenAI gpt-image-2"
+                  >
+                    {batchImaging ? "Generating images…" : "✨ Generate images"}
+                  </button>
                   <button className="btn-ghost btn-sm" onClick={() => downloadCsv(true)} title="Approved scripts only">
                     ↓ Approved CSV
                   </button>
@@ -419,6 +495,8 @@ export default function ScriptsPage() {
                     script={s}
                     onToggle={() => toggleApprove(s.id, !s.approved)}
                     onDelete={() => removeScript(s.id)}
+                    onGenerateImage={() => generateOneImage(s.id)}
+                    imagingBusy={Boolean(perScriptImaging[s.id])}
                   />
                 ))}
               </div>
@@ -461,66 +539,156 @@ function ScriptCard({
   script,
   onToggle,
   onDelete,
+  onGenerateImage,
+  imagingBusy,
 }: {
   index: number;
   script: AdScript;
   onToggle: () => void;
   onDelete: () => void;
+  onGenerateImage: () => void;
+  imagingBusy: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const csv = script.script_csv ?? {};
+  const imgStatus = script.image_status ?? "idle";
+  const isPortrait = script.placement !== "feed";
+  const imgAspect = isPortrait ? "9/16" : "1/1";
+  const imageDownloadName = `script_${String(index).padStart(2, "0")}.png`;
+
   return (
     <div className="card" style={{ padding: 14, borderColor: script.approved ? "var(--accent)" : "var(--border)", background: script.approved ? "var(--accent-soft)" : undefined }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div className="row" style={{ gap: 8, alignItems: "center" }}>
-            <span className="mono muted-sm">#{String(index).padStart(2, "0")}</span>
-            <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>
-              {script.script_kind.replace(/_/g, " ")}
-            </span>
-            {script.placement && script.placement !== "mixed" && (
-              <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>{script.placement}</span>
+      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 14 }}>
+        {/* Image slot */}
+        <div style={{ width: 180 }}>
+          <div
+            style={{
+              width: "100%",
+              aspectRatio: imgAspect,
+              borderRadius: 8,
+              background: "#000",
+              overflow: "hidden",
+              border: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+            }}
+          >
+            {script.image_url ? (
+              <img
+                src={script.image_url}
+                alt={`Ad image for script ${index}`}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              <span className="muted-sm" style={{ fontSize: 11, textAlign: "center", padding: 8 }}>
+                {imgStatus === "pending" ? "Generating…" : imgStatus === "failed" ? "Failed" : "No image yet"}
+              </span>
             )}
-            {script.approved && <span className="badge badge-succeeded">approved</span>}
+            {imgStatus === "pending" && (
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>
+                Generating…
+              </div>
+            )}
           </div>
-          <div style={{ marginTop: 8, fontWeight: 600 }}>{csv["Building Block"] ?? "—"}</div>
-          <div style={{ marginTop: 4, fontSize: 14, lineHeight: 1.5 }}>
-            {csv["Script/Voiceover"] ?? "—"}
+          <div className="row" style={{ marginTop: 6, gap: 4, flexWrap: "wrap" }}>
+            <button
+              className="btn-ghost btn-sm"
+              onClick={onGenerateImage}
+              disabled={imagingBusy || imgStatus === "pending"}
+              style={{ fontSize: 11, flex: 1 }}
+              title={script.image_url ? "Regenerate image" : "Generate image"}
+            >
+              {imagingBusy || imgStatus === "pending"
+                ? "…"
+                : script.image_url
+                  ? "↻ Regen"
+                  : imgStatus === "failed"
+                    ? "Retry"
+                    : "✨ Image"}
+            </button>
+            {script.image_url && (
+              <a
+                href={`${script.image_url}${script.image_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(imageDownloadName)}`}
+                download={imageDownloadName}
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: "var(--accent-soft)",
+                  color: "var(--accent)",
+                  border: "1px solid var(--accent)",
+                  borderRadius: 4,
+                  textDecoration: "none",
+                }}
+              >
+                ↓ PNG
+              </a>
+            )}
           </div>
-          {csv["Text on Screen"] && (
-            <div className="muted-sm" style={{ marginTop: 6 }}>
-              <strong style={{ color: "var(--text-2)" }}>On screen:</strong> {csv["Text on Screen"]}
+          {script.image_error && (
+            <p style={{ color: "#ff6b6b", fontSize: 10, marginTop: 4 }}>{script.image_error}</p>
+          )}
+        </div>
+
+        {/* Script body */}
+        <div style={{ minWidth: 0 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="row" style={{ gap: 8, alignItems: "center" }}>
+                <span className="mono muted-sm">#{String(index).padStart(2, "0")}</span>
+                <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>
+                  {script.script_kind.replace(/_/g, " ")}
+                </span>
+                {script.placement && script.placement !== "mixed" && (
+                  <span className="badge" style={{ background: "var(--surface-2)", color: "var(--text-2)", borderColor: "var(--border)" }}>{script.placement}</span>
+                )}
+                {script.approved && <span className="badge badge-succeeded">approved</span>}
+              </div>
+              <div style={{ marginTop: 8, fontWeight: 600 }}>{csv["Building Block"] ?? "—"}</div>
+              <div style={{ marginTop: 4, fontSize: 14, lineHeight: 1.5 }}>
+                {csv["Script/Voiceover"] ?? "—"}
+              </div>
+              {csv["Text on Screen"] && (
+                <div className="muted-sm" style={{ marginTop: 6 }}>
+                  <strong style={{ color: "var(--text-2)" }}>On screen:</strong> {csv["Text on Screen"]}
+                </div>
+              )}
+            </div>
+            <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+              <button className="btn-ghost btn-sm" onClick={() => setExpanded((e) => !e)}>
+                {expanded ? "Hide" : "Details"}
+              </button>
+              <button
+                className="btn-sm"
+                onClick={onToggle}
+                style={script.approved
+                  ? { background: "transparent", color: "var(--text-2)", borderColor: "var(--border)" }
+                  : { background: "var(--accent)", color: "var(--bg)", borderColor: "var(--accent)" }}
+              >
+                {script.approved ? "Unapprove" : "Approve"}
+              </button>
+              <button className="btn-sm btn-danger" onClick={onDelete} title="Delete">×</button>
+            </div>
+          </div>
+          {expanded && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, fontSize: 13 }}>
+                <Detail label="Scene Recording Style" value={csv["Scene Recording Style"]} />
+                <Detail label="Production" value={csv["Production"]} />
+                <Detail label="Editor Note" value={csv["Editor Note"]} />
+                <Detail label="Visual Ref" value={csv["Visual Ref"]} />
+                <Detail label="Execution Type" value={csv["Execution Type"]} />
+                <Detail label="Ad Reference URL" value={csv["Ad Reference URL"]} />
+                {script.image_prompt && <Detail label="Image prompt" value={script.image_prompt} />}
+              </div>
             </div>
           )}
         </div>
-        <div className="row" style={{ gap: 6, flexShrink: 0 }}>
-          <button className="btn-ghost btn-sm" onClick={() => setExpanded((e) => !e)}>
-            {expanded ? "Hide" : "Details"}
-          </button>
-          <button
-            className="btn-sm"
-            onClick={onToggle}
-            style={script.approved
-              ? { background: "transparent", color: "var(--text-2)", borderColor: "var(--border)" }
-              : { background: "var(--accent)", color: "var(--bg)", borderColor: "var(--accent)" }}
-          >
-            {script.approved ? "Unapprove" : "Approve"}
-          </button>
-          <button className="btn-sm btn-danger" onClick={onDelete} title="Delete">×</button>
-        </div>
       </div>
-      {expanded && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, fontSize: 13 }}>
-            <Detail label="Scene Recording Style" value={csv["Scene Recording Style"]} />
-            <Detail label="Production" value={csv["Production"]} />
-            <Detail label="Editor Note" value={csv["Editor Note"]} />
-            <Detail label="Visual Ref" value={csv["Visual Ref"]} />
-            <Detail label="Execution Type" value={csv["Execution Type"]} />
-            <Detail label="Ad Reference URL" value={csv["Ad Reference URL"]} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

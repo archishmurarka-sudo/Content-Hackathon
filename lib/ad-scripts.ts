@@ -4,6 +4,8 @@
 import { hasDb, sql, ensureSchema } from "./db";
 import type { GeneratedScript, CsvRow } from "./script-generator";
 
+export type ImageStatus = "idle" | "pending" | "ready" | "failed";
+
 export type AdScript = {
   id: string;
   product_id: string;
@@ -14,6 +16,12 @@ export type AdScript = {
   source_ref: string | null;
   script_csv: CsvRow;
   approved: boolean;
+  // Static ad image (one per script, generated via OpenAI gpt-image-2).
+  image_status?: ImageStatus;
+  image_url?: string | null;
+  image_key?: string | null;
+  image_prompt?: string | null;
+  image_error?: string | null;
   created_at: number;
 };
 
@@ -110,6 +118,37 @@ export async function deleteScript(id: string): Promise<boolean> {
   return mem.delete(id);
 }
 
+export async function setScriptImage(
+  id: string,
+  patch: {
+    image_status?: ImageStatus;
+    image_url?: string | null;
+    image_key?: string | null;
+    image_prompt?: string | null;
+    image_error?: string | null;
+  }
+): Promise<AdScript | undefined> {
+  if (hasDb()) {
+    await ensureSchema();
+    const s = sql();
+    await s`
+      UPDATE ad_scripts SET
+        image_status = COALESCE(${patch.image_status ?? null}, image_status),
+        image_url    = ${patch.image_url ?? null},
+        image_key    = ${patch.image_key ?? null},
+        image_prompt = ${patch.image_prompt ?? null},
+        image_error  = ${patch.image_error ?? null}
+      WHERE id = ${id}
+    `;
+    return getScript(id);
+  }
+  const cur = mem.get(id);
+  if (!cur) return undefined;
+  Object.assign(cur, patch);
+  mem.set(id, cur);
+  return cur;
+}
+
 function rowToScript(r: any): AdScript {
   return {
     id: r.id,
@@ -121,6 +160,11 @@ function rowToScript(r: any): AdScript {
     source_ref: r.source_ref ?? null,
     script_csv: r.script_csv,
     approved: Boolean(r.approved),
+    image_status: (r.image_status as ImageStatus | null) ?? "idle",
+    image_url: r.image_url ?? null,
+    image_key: r.image_key ?? null,
+    image_prompt: r.image_prompt ?? null,
+    image_error: r.image_error ?? null,
     created_at: Number(r.created_at),
   };
 }
