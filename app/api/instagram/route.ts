@@ -53,10 +53,26 @@ export async function POST(req: NextRequest) {
     enrichment = await resolveEnrichmentFromBody(productForEnrich, body);
   }
 
+  // Diagnostic: warn loudly if the product has no hero image. Without one,
+  // OpenAI falls back to text-only generation and invents a product from
+  // scratch — what the operator most often hits as "the image isn't using
+  // my actual product." Surface this on the response so the UI can show
+  // a clear banner instead of letting the user discover it visually.
+  const heroPresent = Boolean(productForEnrich?.hero_image_url);
+  const galleryCount = productForEnrich?.gallery_image_urls?.length ?? 0;
+  const referenceWarning = !heroPresent
+    ? `No hero photo on file for "${productForEnrich?.name ?? product_id}". The image was generated from text only — upload a real product photo on the Products tab to lock the actual jar/label into every render.`
+    : null;
+
   try {
     const post = await generateIgPost({ product_id, theme, format, audience, vibe, enrichment });
     return NextResponse.json({
       ...post,
+      reference: {
+        hero_present: heroPresent,
+        gallery_count: galleryCount,
+        warning: referenceWarning,
+      },
       enrichment: enrichment ? {
         brand_slug: enrichment.brand_slug,
         counts: {

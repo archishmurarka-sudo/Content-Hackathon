@@ -11,7 +11,7 @@ import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
 import type { BrandContext } from "@/lib/brand-context";
 
-type Product = { id: string; name: string; brand: string; one_liner?: string };
+type Product = { id: string; name: string; brand: string; one_liner?: string; hero_image_url?: string | null };
 type IgFormat = "feed_1x1" | "feed_4x5" | "reels_9x16";
 type IgPost = {
   id: string;
@@ -135,11 +135,22 @@ export default function InstagramPage() {
     }
     if (data?.image_status === "ready") {
       toast.success("Image generated", `${products.find((p) => p.id === productId)?.name ?? productId} · ${FORMAT_LABEL[format]}`);
+      // Server flag — if the product had no hero, this was a text-only render
+      // (invented bottle). Surface so the operator knows to fix the catalog.
+      if (data?.reference?.warning) {
+        toast.error("Generated without product photo", data.reference.warning);
+      }
     } else if (data?.image_status === "failed") {
       toast.error("Image generation failed", data?.error ?? "see settings");
     }
     refresh();
   }
+
+  // Pre-flight check on the selected product. If no hero is on file the
+  // generated image will be invented from text — show a banner so the
+  // operator can fix it before spending the API call.
+  const selectedProduct = products.find((p) => p.id === productId) || null;
+  const heroMissing = Boolean(selectedProduct) && !selectedProduct?.hero_image_url;
 
   async function removePost(id: string) {
     if (!confirm("Delete this post?")) return;
@@ -280,6 +291,35 @@ export default function InstagramPage() {
               Tip: name a setting, lighting, prop, or mood. Gemini turns this into a concrete prompt for gpt-image-2.
             </p>
           </div>
+
+          {heroMissing && selectedProduct && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: "rgba(220, 60, 60, 0.06)",
+                border: "1px solid rgba(220, 60, 60, 0.4)",
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: "var(--text, #222)",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+              }}
+            >
+              <span style={{ fontSize: 14 }}>⚠️</span>
+              <div style={{ flex: 1 }}>
+                <strong>{selectedProduct.name} has no product photo on file.</strong>
+                <div style={{ marginTop: 2, color: "var(--muted, #555)" }}>
+                  Generation will fall back to text-only — the image will show an AI-invented bottle, not your actual product.{" "}
+                  <Link href={`/products/${selectedProduct.id}`} style={{ color: "var(--accent, #1f6dd0)", textDecoration: "underline" }}>
+                    Upload a hero image on the product page →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div style={{ marginTop: 14 }}>
             <ConnoisseurToggle

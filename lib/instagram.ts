@@ -153,17 +153,17 @@ export async function generateIgPost(input: {
     });
 
     // Step 2 — OpenAI renders the PNG.
-    // Pass the product's hero image as a reference so the actual product
-    // (label, colors, packaging) appears in the output rather than an
-    // AI-imagined version. The /images/edits endpoint composes the new
-    // scene AROUND this reference. Falls back to text-only if the edit
-    // path errors.
+    // Pass the product's hero image (+ any gallery shots) as references so
+    // the ACTUAL product appears in the output rather than an AI-imagined
+    // version. /images/edits composes the new scene AROUND these references.
+    // Falls back to text-only if the edit path errors or no hero exists.
     const img = await generateAdImage({
       prompt: creative.image_prompt,
       aspect: FORMAT_TO_ASPECT[input.format],
       quality: "medium",
       prefix: `instagram/${id}`,
       reference_image_url: product.hero_image_url ?? null,
+      extra_reference_urls: product.gallery_image_urls ?? null,
     });
 
     const updated: IgPost = {

@@ -18,38 +18,58 @@ export type BrandGuidelines = {
 export const BRAND_GUIDELINES: Record<string, BrandGuidelines> = {
   "Root Labs": {
     brand: "Root Labs",
+    // Voice extracted from rootlabs.co — warm + accessible + science-confident
+    // without clinical jargon. Heritage-driven ("handpicked in nature,
+    // perfected in science"), bridges traditional herbal wisdom with modern
+    // bioavailability science. "Made for the American customer." Aspirational
+    // yet grounded; speaks to performance-oriented adults (creators,
+    // professionals, athletes) who want real benefits without crashes.
     tone:
-      "Warm, science-grounded, peer-to-peer. Like a knowledgeable friend who reads the studies but talks like a human. Confident without being preachy. Never fearmongering, never shaming, never alarmist. Acknowledge complexity (sleep is multi-causal, hormones are individual) instead of one-size-fits-all promises.",
+      "Warm, accessible, science-confident — not clinical. 'Handpicked in nature, perfected in science.' Bridges traditional herbal wisdom (ashwagandha, shilajit, sea moss, turmeric) with modern bioavailability science. Speaks to performance-oriented Americans — creators, business owners, trainers — who want sustained energy and real wellness without crashes or compromise on taste. Confident but conversational; the friend who reads the studies but talks like a human.",
     do: [
-      "Use plain language for science — 'glycinate is gentler on the stomach' beats 'enhanced bioavailability'.",
-      "Mention specific ingredients + their evidence ('300mg KSM-66 ashwagandha', 'magnesium glycinate beadlets').",
-      "Validate the reader's experience ('peri sleep is its own beast', 'stress shows up in your jaw before your head').",
+      // From rootlabs.co recurring vocabulary
+      "Use the brand's own words: 'bioavailability', 'handpicked', 'perfected', 'roots', 'science-backed', 'maximum absorption', 'carefully crafted', 'real benefits', 'no crashes'.",
+      "Anchor on heritage + science together — single-ingredient stories that explain WHY the form factor matters ('beadlet delivery protects magnesium through digestion').",
+      "Mention specific ingredients + dosage + form factor ('4000mg shilajit gold, 75% fulvic acid', 'KSM-66 ashwagandha', 'magnesium glycinate beadlets').",
+      "Validate the reader's experience without alarmism ('peri sleep is its own beast', 'energy that doesn't crash at 3pm').",
       "Use second-person ('your', 'you') — feels like a DM, not a press release.",
-      "Be specific about formats and rituals (e.g. 'two gummies, 30 min before bed').",
+      "Be specific about formats and rituals ('two gummies, 30 min before bed').",
+      "Per Root Labs site language: prefer 'supports' / 'helps' / 'benefits' over medical claims.",
     ],
     dont: [
+      // Compliance — supplement structure-function only
       "No 'cure', 'treat', 'heal', 'prevent', 'reverse' — supplement compliance (FDA structure-function only).",
+      "No 'as seen on' / fake credentials / celebrity name-drops.",
       "No before/after weight or skin claims that imply a guaranteed outcome.",
-      "No fearmongering about aging, perimenopause, low testosterone, or stress — these are normal human experiences, not crises.",
+      // Sensitivity — these are normal life stages, not crises
+      "No fearmongering about aging, perimenopause, menopause, low testosterone, stress, or hair loss — these are normal human experiences.",
       "No body-shaming, weight-loss promises, or appearance pressure.",
-      "No celebrity name-dropping, no fake 'as seen on'.",
+      // Voice
+      "No clinical jargon dump — translate science into plain language (rootlabs.co never reads like a label).",
       "No emojis at the start of a hook; max 2 emojis total in the body.",
       "No all-caps hooks. No more than one exclamation mark per caption.",
+      "Do NOT invent a 'natural cure' for anything; rootlabs.co is supplements + rituals, not medicine.",
     ],
+    // Visual scraped from rootlabs.co + product photography style
     visual:
-      "Photoreal, smartphone-aesthetic, premium-feeling but never sterile. Warm natural daylight, real fabric/wood/ceramic/skin textures, shallow depth of field. Product is the hero but framed inside an actual moment (a hand opening the bottle on a counter, gummies arranged next to a coffee mug, the bottle on a nightstand). Avoid: floating-on-gradient ad shots, glossy CGI, fake glass refractions, AI-illustration look. The frame must pass for an actual photo on a real surface.",
+      "Clean, modern product photography on neutral / earthy backgrounds. Photoreal smartphone-aesthetic, premium-feeling but never sterile. Warm natural daylight, real fabric/wood/ceramic/skin textures, shallow depth of field. Product is the hero but framed inside an actual moment — a hand opening the jar, gummies arranged next to a coffee mug, the bottle on a nightstand at golden hour. Botanical / ingredient imagery (raw ashwagandha root, shilajit resin, sea moss) makes a good supporting layer. Avoid: floating-on-gradient ad shots, glossy CGI, fake glass refractions, AI-illustration look. The frame must pass for an actual editorial product photo on a real surface.",
     palette: [
-      "#1F1A14", // espresso (text / branded dark)
-      "#F4EFE6", // off-white linen
-      "#C9A66B", // amber gold (accent — the orange-cart energy)
-      "#8B9D83", // soft sage (calm wellness pop)
+      "#1F1A14", // espresso (text / branded dark — Root Labs neutral)
+      "#F4EFE6", // off-white linen background
+      "#C9A66B", // amber gold (TikTok Shop orange-cart energy)
+      "#8B9D83", // soft sage (botanical / wellness)
       "#E8DCC8", // warm cream
+      "#3D2818", // dark walnut (heritage / shilajit)
     ],
+    // Confirmed from rootlabs.co — @rootlabsco is the Instagram handle.
     standard_hashtags: [
       "rootlabs",
-      "magashwa",
+      "rootlabsco",
+      "handpicked",
+      "bioavailability",
       "ashwagandha",
       "magnesium",
+      "shilajit",
       "supplements",
       "wellness",
     ],
