@@ -1,21 +1,16 @@
 import { NextRequest } from "next/server";
 
-// Password sourced from DASHBOARD_PASSWORD env var. If unset locally, a
-// hardcoded dev fallback keeps the wall working — production must set
-// the env var explicitly. Trim to forgive stray whitespace from copy-paste.
-const FALLBACK_PASSWORD = "Mosaic@2026";
-function getPassword(): string {
-  return (process.env.DASHBOARD_PASSWORD ?? FALLBACK_PASSWORD).trim();
-}
-
-export function dashboardPassword(): string {
-  return getPassword();
-}
+// Password gate disabled — dashboard is open. Helpers kept as no-ops so
+// existing imports across API routes continue to compile without churn.
 
 const COOKIE = "hf_dash_auth";
 
-export function isAuthed(req: NextRequest): boolean {
-  return req.cookies.get(COOKIE)?.value === getPassword();
+export function dashboardPassword(): string {
+  return "";
+}
+
+export function isAuthed(_req: NextRequest): boolean {
+  return true;
 }
 
 export function authCookieName() {
