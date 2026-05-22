@@ -14,9 +14,11 @@
 // to emit CSV directly — CSV with commas inside quoted strings trips up
 // LLMs more often than not.
 
-import { resolveTextModel } from "./models";
+import { resolveScriptModel } from "./models";
 import { bump } from "./usage";
 import type { Product } from "./data";
+import type { ScriptEnrichment } from "./connoisseur_enrichment";
+import { renderEnrichmentForPrompt } from "./connoisseur_enrichment";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -58,6 +60,11 @@ export type GenerateInput = {
   placement: Placement;
   competitor_refs?: string;
   notes?: string;
+  // Live corpus enrichment from Connoisseur MCP — voice atoms, selling
+  // points, winner combos, compliance gates, archetype performance.
+  // Optional: when present, injected as a high-priority block above the
+  // hardcoded HARD RULES so the model treats the corpus as ground truth.
+  enrichment?: ScriptEnrichment;
 };
 
 function buildPrompt(input: GenerateInput): string {
@@ -93,6 +100,7 @@ ${quotes}
 
 ${input.competitor_refs ? `COMPETITOR REFERENCES (swipe structure, not language)\n${input.competitor_refs}\n` : ""}
 ${input.notes ? `OPERATOR NOTES\n${input.notes}\n` : ""}
+${input.enrichment ? `\n${renderEnrichmentForPrompt(input.enrichment)}\n` : ""}
 
 PLACEMENT
 ${placementBlock}
@@ -176,7 +184,7 @@ export async function generateScripts(input: GenerateInput): Promise<GeneratedSc
   if (!key) throw new Error("GEMINI_API_KEY not set");
 
   const prompt = buildPrompt(input);
-  const model = resolveTextModel();
+  const model = resolveScriptModel();
 
   const res = await fetch(
     `${GEMINI_BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`,

@@ -7,6 +7,10 @@
 
 const SAFE_TEXT_DEFAULT = "gemini-2.5-flash";
 const SAFE_IMAGE_DEFAULT = "gemini-2.5-flash-image";
+// Script generator uses Pro by default — voice + restraint matters more for
+// DR copy than the cost saving on Flash. Beat decomposition / storyboard
+// stages stay on Flash via resolveTextModel().
+const SAFE_SCRIPT_DEFAULT = "gemini-2.5-pro";
 
 // Models that are known dead / retired / unsafe to default to. Anything matching
 // these patterns falls back to the safe default with a server-log warning.
@@ -38,4 +42,11 @@ export function resolveTextModel(): string {
 
 export function resolveImageModel(): string {
   return sanitize(process.env.GEMINI_IMAGE_MODEL, SAFE_IMAGE_DEFAULT, "GEMINI_IMAGE_MODEL");
+}
+
+// Dedicated Gemini model for the Meta Scripts copywriter. Defaults to
+// gemini-2.5-pro — overrideable via GEMINI_SCRIPT_MODEL if you want to roll
+// back to flash for cost or try a newer ID.
+export function resolveScriptModel(): string {
+  return sanitize(process.env.GEMINI_SCRIPT_MODEL, SAFE_SCRIPT_DEFAULT, "GEMINI_SCRIPT_MODEL");
 }
