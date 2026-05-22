@@ -97,6 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             quality: "medium",
             prefix: `scripts/${id}/keyframes/${b.idx}`,
             reference_image_url: product.hero_image_url ?? null,
+            extra_reference_urls: product.gallery_image_urls ?? null,
           });
           results[b.idx] = {
             ...results[b.idx],

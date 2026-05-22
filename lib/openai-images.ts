@@ -11,13 +11,47 @@
 // rest of the app uses. OpenAI's `b64_json` response is decoded directly to
 // a Buffer and handed to putAsset() — no temp file on disk.
 
-import { putAsset, type PutResult } from "./storage";
+import { putAsset, readAsset, type PutResult } from "./storage";
 import { bump } from "./usage";
 
 const OPENAI_BASE = "https://api.openai.com/v1";
 
 function imageModel(): string {
   return (process.env.OPENAI_IMAGE_MODEL || "gpt-image-2").trim();
+}
+
+// Fetch any image URL (R2-backed `/api/assets/<key>` OR external) and return
+// raw bytes + content type — so we can shove it into a multipart form for
+// OpenAI's /v1/images/edits endpoint. Lets the script generator ground on
+// the actual product photo from the Products tab.
+async function fetchImageBytes(urlOrPath: string): Promise<{ buf: Buffer; contentType: string }> {
+  // `/api/assets/<key>` paths point at our own proxy — short-circuit and read
+  // from storage directly (works server-side without needing a base URL).
+  const m = urlOrPath.match(/^\/api\/assets\/(.+)$/);
+  if (m) {
+    const key = m[1].split("/").map(decodeURIComponent).join("/");
+    const asset = await readAsset(key);
+    if (!asset) throw new Error(`product image not found in storage: ${key}`);
+    return { buf: asset.body, contentType: asset.contentType };
+  }
+  // Absolute URL — fetch directly.
+  if (/^https?:\/\//i.test(urlOrPath)) {
+    const res = await fetch(urlOrPath);
+    if (!res.ok) throw new Error(`product image fetch ${res.status} from ${urlOrPath}`);
+    const ab = await res.arrayBuffer();
+    return {
+      buf: Buffer.from(ab),
+      contentType: res.headers.get("content-type") || "image/png",
+    };
+  }
+  throw new Error(`unrecognized product image URL shape: ${urlOrPath}`);
+}
+
+function extForMime(mime: string): string {
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("gif")) return "gif";
+  return "png";
 }
 
 export type ImageSize = "1024x1024" | "1024x1536" | "1536x1024";
@@ -40,6 +74,11 @@ export type GenerateImageOptions = {
   // Use the product hero image here — the bottle/label/packaging in the
   // output will then match the real product exactly.
   reference_image_url?: string | null;
+  // Optional supporting references — gpt-image-2 /images/edits accepts up
+  // to 16 input images. Use this to pass the product's gallery shots
+  // (lifestyle / in-hand / packaging close-ups) so the model has more
+  // angles to ground against. Capped at 3 here to keep upload size sane.
+  extra_reference_urls?: string[] | null;
 };
 
 export type GenerateImageResult = PutResult & {
@@ -47,6 +86,11 @@ export type GenerateImageResult = PutResult & {
   size: ImageSize;
   prompt: string;
   cost_estimate_usd: number;
+  // Diagnostic: did we actually run the reference-grounded edit path, or
+  // did we fall back to text-only generations? Surfaced on the row so the
+  // operator can see whether their real product photo got used.
+  used_reference_image: boolean;
+  reference_image_count: number;
 };
 
 export async function generateAdImage(opts: GenerateImageOptions): Promise<GenerateImageResult> {
@@ -61,14 +105,18 @@ export async function generateAdImage(opts: GenerateImageOptions): Promise<Gener
   const quality = opts.quality ?? "medium";
 
   // Reference-image path: keeps the real product visible in the output.
-  // gpt-image-1's /images/edits accepts multipart with an `image` file +
-  // a `prompt` that describes the new scene around it.
+  // gpt-image-2's /images/edits accepts multipart with one or more `image`
+  // files + a `prompt` that describes the new scene around them. We pass
+  // the product hero PLUS up to 3 gallery shots when available.
   if (opts.reference_image_url) {
     try {
       return await editFromReference({
         key, model, prompt: opts.prompt, size, quality,
         prefix: opts.prefix,
-        reference_image_url: opts.reference_image_url,
+        reference_image_urls: [
+          opts.reference_image_url,
+          ...((opts.extra_reference_urls ?? []).slice(0, 3)),
+        ],
       });
     } catch (err: any) {
       // If the edits endpoint rejects (e.g. unsupported model variant),
@@ -121,6 +169,8 @@ export async function generateAdImage(opts: GenerateImageOptions): Promise<Gener
       size,
       prompt: opts.prompt,
       cost_estimate_usd: estimateCost(quality, size),
+      used_reference_image: false,
+      reference_image_count: 0,
     };
   }
 
@@ -139,6 +189,8 @@ export async function generateAdImage(opts: GenerateImageOptions): Promise<Gener
     size,
     prompt: opts.prompt,
     cost_estimate_usd: estimateCost(quality, size),
+    used_reference_image: false,
+    reference_image_count: 0,
   };
 }
 
@@ -151,9 +203,10 @@ function estimateCost(quality: "low" | "medium" | "high", _size: ImageSize): num
   return { low: 0.011, medium: 0.042, high: 0.167 }[quality];
 }
 
-// Reference-image edit path. Downloads the product hero, hands it to
-// /v1/images/edits along with the prompt, and stores the result the same
-// way as the generations path so callers don't care which one ran.
+// Reference-image edit path. Downloads the product hero (and optional
+// gallery shots), hands them to /v1/images/edits along with the prompt,
+// and stores the result the same way as the generations path so callers
+// don't care which one ran.
 async function editFromReference(opts: {
   key: string;
   model: string;
@@ -161,14 +214,29 @@ async function editFromReference(opts: {
   size: ImageSize;
   quality: "low" | "medium" | "high";
   prefix: string;
-  reference_image_url: string;
+  reference_image_urls: string[];   // 1..N — hero first, gallery after
 }): Promise<GenerateImageResult> {
-  const absUrl = absolutizeAssetUrl(opts.reference_image_url);
-  const refRes = await fetch(absUrl);
-  if (!refRes.ok) throw new Error(`reference image fetch ${refRes.status} from ${absUrl}`);
-  const refBuf = Buffer.from(await refRes.arrayBuffer());
-  const refMime = (refRes.headers.get("content-type") || "image/png").split(";")[0].trim();
-  const refExt = refMime === "image/jpeg" ? "jpg" : refMime === "image/webp" ? "webp" : "png";
+  if (opts.reference_image_urls.length === 0) {
+    throw new Error("editFromReference called with no references");
+  }
+
+  const refs: { buf: Buffer; mime: string; name: string }[] = [];
+  for (let i = 0; i < opts.reference_image_urls.length; i++) {
+    const url = opts.reference_image_urls[i];
+    try {
+      const { buf, contentType } = await fetchImageBytes(url);
+      const mime = (contentType || "image/png").split(";")[0].trim();
+      const ext = extForMime(mime);
+      refs.push({ buf, mime, name: `${i === 0 ? "product" : `ref_${i}`}.${ext}` });
+    } catch (err: any) {
+      // Skip any reference we couldn't load — keep going with what we have.
+      if (i === 0) throw err;   // hero failure is fatal; gallery failure isn't
+      console.warn(`[openai-images] skipping reference ${url}: ${err?.message ?? err}`);
+    }
+  }
+  if (refs.length === 0) {
+    throw new Error("editFromReference: no references could be loaded");
+  }
 
   const fd = new FormData();
   fd.append("model", opts.model);
@@ -176,7 +244,12 @@ async function editFromReference(opts: {
   fd.append("size", opts.size);
   fd.append("n", "1");
   fd.append("quality", opts.quality);
-  fd.append("image", new Blob([refBuf], { type: refMime }), `product.${refExt}`);
+  // gpt-image-2 accepts multiple `image[]` files in one call; some SDK
+  // wrappers use `image` repeated. We send `image[]` because it's the
+  // documented form for multi-image input.
+  for (const r of refs) {
+    fd.append(refs.length === 1 ? "image" : "image[]", new Blob([r.buf], { type: r.mime }), r.name);
+  }
 
   const res = await fetch(`${OPENAI_BASE}/images/edits`, {
     method: "POST",
@@ -202,7 +275,15 @@ async function editFromReference(opts: {
       contentType: dl.headers.get("content-type") ?? "image/png",
     });
     bump("frame_image");
-    return { ...stored, model: opts.model, size: opts.size, prompt: opts.prompt, cost_estimate_usd: estimateCost(opts.quality, opts.size) };
+    return {
+      ...stored,
+      model: opts.model,
+      size: opts.size,
+      prompt: opts.prompt,
+      cost_estimate_usd: estimateCost(opts.quality, opts.size),
+      used_reference_image: true,
+      reference_image_count: refs.length,
+    };
   }
   const buf = Buffer.from(b64, "base64");
   const stored = await putAsset({
@@ -218,6 +299,8 @@ async function editFromReference(opts: {
     size: opts.size,
     prompt: opts.prompt,
     cost_estimate_usd: estimateCost(opts.quality, opts.size),
+    used_reference_image: true,
+    reference_image_count: refs.length,
   };
 }
 
@@ -253,7 +336,7 @@ export function buildPromptForKeyframe(args: {
   const referenceLock = args.hero_image_url
     ? [
         "PRODUCT REFERENCE LOCK",
-        "A reference image of the EXACT product is supplied with this request. The bottle / pouch / packaging / label / colors in your output MUST match the reference identically. Do NOT redesign the label. Do NOT change the bottle shape or color. Compose the scene AROUND the supplied product.",
+        "Reference photo(s) of the EXACT product are supplied with this request (the first image is the canonical packshot; any additional images are alternate angles / lifestyle shots from the brand's gallery). The bottle / pouch / packaging / label / typography / colors in your output MUST match the references identically. Do NOT redesign the label. Do NOT change the bottle shape or color. Compose the new scene AROUND the supplied product.",
         "",
       ]
     : [];
@@ -315,7 +398,7 @@ export function buildPromptForAdScript(args: {
   const referenceLock = args.hero_image_url
     ? [
         "PRODUCT REFERENCE LOCK",
-        "A reference image of the EXACT product is supplied with this request. The bottle / pouch / packaging / label / colors in your output MUST match the reference identically. Do NOT redesign the label. Do NOT change the bottle shape or color. Compose the scene AROUND the supplied product.",
+        "Reference photo(s) of the EXACT product are supplied with this request (the first image is the canonical packshot; any additional images are alternate angles / lifestyle shots from the brand's gallery). The bottle / pouch / packaging / label / typography / colors in your output MUST match the references identically. Do NOT redesign the label. Do NOT change the bottle shape or color. Compose the new scene AROUND the supplied product.",
         "",
       ]
     : [];

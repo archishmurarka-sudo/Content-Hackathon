@@ -49,6 +49,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       quality: "medium",
       prefix: `scripts/${id}/images`,
       reference_image_url: product.hero_image_url ?? null,
+      // Operator's uploaded gallery shots from the Products tab feed in as
+      // additional refs so gpt-image-2 sees the product from multiple angles.
+      extra_reference_urls: product.gallery_image_urls ?? null,
     });
     const updated = await setScriptImage(id, {
       image_status: "ready",
