@@ -115,7 +115,7 @@ export default function InstagramPage() {
     const res = await fetch("/api/instagram", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: productId, format, theme, audience, vibe, use_brand_context: useBrandIntel }),
+      body: JSON.stringify({ product_id: productId, format, theme, audience, vibe, enrich_with_connoisseur: useBrandIntel }),
     });
     setGenerating(false);
     const data = await res.json().catch(() => ({}));
@@ -201,6 +201,32 @@ export default function InstagramPage() {
               <select value={theme} onChange={(e) => setTheme(e.target.value)}>
                 {themesToUse.map((t) => (
                   <option key={t} value={t}>{THEME_LABEL[t] ?? t.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ minWidth: 220 }}>
+              <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>Audience / pain</label>
+              <select value={audience} onChange={(e) => setAudience(e.target.value)}>
+                {(audiences.length > 0
+                  ? audiences
+                  : [
+                      { value: "general", label: "General" },
+                      { value: "perimenopause", label: "Perimenopause" },
+                      { value: "menopause", label: "Menopause" },
+                      { value: "womens_wellness", label: "Women · general wellness" },
+                      { value: "mens_wellness", label: "Men · general wellness" },
+                      { value: "mens_testosterone", label: "Men · T + energy" },
+                      { value: "sleep", label: "Sleep" },
+                      { value: "stress_anxiety", label: "Stress / anxiety" },
+                      { value: "energy_focus", label: "Energy / focus" },
+                      { value: "skin", label: "Skin" },
+                      { value: "hair_thinning", label: "Hair thinning" },
+                      { value: "new_parents", label: "New parents" },
+                      { value: "athletes_recovery", label: "Athletes / recovery" },
+                      { value: "longevity_50plus", label: "Longevity · 50+" },
+                    ]
+                ).map((a) => (
+                  <option key={a.value} value={a.value} title={a.pain ?? ""}>{a.label}</option>
                 ))}
               </select>
             </div>
@@ -334,7 +360,39 @@ export default function InstagramPage() {
                   {post.hashtags.map((h) => `#${h}`).join(" ")}
                 </p>
               )}
-              <div className="row" style={{ marginTop: 4, gap: 6 }}>
+              {post.published_at && (
+                <div style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  fontSize: 11,
+                  color: "var(--success, #2a8c5a)",
+                  fontWeight: 600,
+                }}>
+                  <CheckCircle2 size={12} /> Published · {new Date(post.published_at).toLocaleString()}
+                </div>
+              )}
+              <div className="row" style={{ marginTop: 4, gap: 6, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => publishPost(post)}
+                  disabled={post.image_status !== "ready" || publishingId === post.id}
+                  style={{
+                    fontSize: 11,
+                    padding: "4px 10px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    background: post.published_at ? "transparent" : "var(--accent, #111)",
+                    color: post.published_at ? "var(--muted, #555)" : "white",
+                    border: post.published_at ? "1px solid var(--border, #ddd)" : "1px solid var(--accent, #111)",
+                    borderRadius: 6,
+                    cursor: post.image_status === "ready" ? "pointer" : "not-allowed",
+                  }}
+                  title={post.image_status !== "ready" ? "Image must be ready before publishing" : post.published_at ? "Already published — click to re-stamp" : "Mark as published"}
+                >
+                  <Upload size={12} /> {publishingId === post.id ? "Publishing…" : post.published_at ? "Re-publish" : "Publish"}
+                </button>
                 <button
                   type="button"
                   onClick={() => copyCaption(post)}

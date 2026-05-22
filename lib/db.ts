@@ -162,8 +162,11 @@ export async function ensureSchema(): Promise<void> {
         created_at   BIGINT NOT NULL
       );
     `;
+    await s`ALTER TABLE ig_posts ADD COLUMN IF NOT EXISTS audience TEXT;`;
+    await s`ALTER TABLE ig_posts ADD COLUMN IF NOT EXISTS published_at BIGINT;`;
     await s`CREATE INDEX IF NOT EXISTS ig_posts_created_at_idx ON ig_posts (created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS ig_posts_product_idx ON ig_posts (product_id, created_at DESC);`;
+    await s`CREATE INDEX IF NOT EXISTS ig_posts_published_idx ON ig_posts (published_at DESC) WHERE published_at IS NOT NULL;`;
   })();
   return g.__schemaReady;
 }
