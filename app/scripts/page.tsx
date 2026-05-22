@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, FileText, Sparkles, Package, Beaker } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, FileText, Sparkles, Package, Beaker, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/components/toast";
 import { ConnoisseurToggle } from "@/components/connoisseur-toggle";
 import { ConnoisseurPanel, type EnrichmentOverride } from "@/components/connoisseur-panel";
+import { brandSlugForProduct } from "@/lib/brand-slug";
 import { readResearchPicks, clearResearchPicks } from "@/lib/research-picks";
 
 type Product = {
@@ -62,6 +64,20 @@ type AdScript = {
     error: string | null;
   }[] | null;
   keyframes_status?: "idle" | "pending" | "ready" | "partial" | "failed";
+  persona?: {
+    age_range: string;
+    gender: string;
+    ethnicity: string;
+    body_type: string;
+    hair: string;
+    wardrobe: string;
+    vibe: string;
+    setting: string;
+    lighting: string;
+    camera_style: string;
+  } | null;
+  generation_prompt?: string | null;
+  generation_model?: string | null;
   created_at: number;
 };
 
@@ -534,9 +550,15 @@ export default function ScriptsPage() {
                 </select>
               </div>
             </div>
-            <p className="muted-sm" style={{ marginTop: 10, fontSize: 12 }}>
-              <strong style={{ color: "var(--text-2)" }}>Single-script mode:</strong> each Generate click produces one script with 5 keyframe images for visual QA, then an 8s Veo video on demand. Batch mode is paused while we validate the loop end-to-end.
-            </p>
+            {placement === "feed" ? (
+              <p className="muted-sm" style={{ marginTop: 10, fontSize: 12 }}>
+                <strong style={{ color: "var(--text-2)" }}>Feed = static image.</strong> No script, no video — head to the Instagram generator to render a single on-brand still in 4:5 or 1:1.
+              </p>
+            ) : (
+              <p className="muted-sm" style={{ marginTop: 10, fontSize: 12 }}>
+                <strong style={{ color: "var(--text-2)" }}>Single-script mode:</strong> each Generate click produces one script with 5 keyframe images for visual QA, then an 8s Veo video on demand. Batch mode is paused while we validate the loop end-to-end.
+              </p>
+            )}
 
             <div style={{ marginTop: 14 }}>
               <label className="muted-sm" style={{ display: "block", marginBottom: 4 }}>
@@ -574,15 +596,36 @@ export default function ScriptsPage() {
                 onCustomize={() => setPanelOpen(true)}
                 pickedCount={totalPicked}
               />
-              <button onClick={generate} disabled={generating || !selectedProductId}>
-                {generating ? "Generating…" : <>Generate {scriptCount} <ArrowRight size={14} /></>}
-              </button>
+              {placement === "feed" ? (
+                <Link
+                  href="/instagram"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 14px",
+                    background: "var(--accent)",
+                    color: "var(--bg-0)",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    fontSize: 14,
+                    textDecoration: "none",
+                  }}
+                >
+                  <ImageIcon size={14} /> Open Instagram generator <ArrowRight size={14} />
+                </Link>
+              ) : (
+                <button onClick={generate} disabled={generating || !selectedProductId}>
+                  {generating ? "Generating…" : <>Generate {scriptCount} <ArrowRight size={14} /></>}
+                </button>
+              )}
             </div>
           </div>
 
           <ConnoisseurPanel
             open={panelOpen}
             onClose={() => setPanelOpen(false)}
+            initialBrandSlug={selectedProduct ? brandSlugForProduct(selectedProduct) ?? undefined : undefined}
             onChange={setEnrichmentOverride}
           />
 
@@ -917,6 +960,36 @@ function ScriptCard({
                 <Detail label="Ad Reference URL" value={csv["Ad Reference URL"]} />
                 {script.image_prompt && <Detail label="Image prompt" value={script.image_prompt} />}
               </div>
+              {script.generation_prompt && (
+                <details style={{ marginTop: 14, fontSize: 11 }}>
+                  <summary style={{ cursor: "pointer", color: "var(--muted)", fontWeight: 600 }}>
+                    📝 View Gemini script prompt (search for "CONNOISSEUR" to verify corpus block landed)
+                    {script.generation_model && (
+                      <span className="muted-sm" style={{ marginLeft: 8, fontWeight: 400 }}>
+                        · model: {script.generation_model}
+                      </span>
+                    )}
+                  </summary>
+                  <pre
+                    style={{
+                      marginTop: 6,
+                      padding: 10,
+                      background: "var(--surface-2)",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      lineHeight: 1.4,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      maxHeight: 360,
+                      overflowY: "auto",
+                      fontFamily: "var(--font-mono, ui-monospace, monospace)",
+                      color: "var(--text-2)",
+                    }}
+                  >
+                    {script.generation_prompt}
+                  </pre>
+                </details>
+              )}
             </div>
           )}
         </div>
@@ -950,6 +1023,21 @@ function ScriptCard({
                 : "🎞️ Generate storyboard"}
           </button>
         </div>
+        {hasKeyframes && script.persona && (
+          <details style={{ marginBottom: 10, fontSize: 11 }}>
+            <summary style={{ cursor: "pointer", color: "var(--muted)", fontWeight: 600 }}>
+              🎭 Casting lock — same person across all 5 frames
+            </summary>
+            <div style={{ marginTop: 6, padding: 10, background: "var(--surface-2)", borderRadius: 6, lineHeight: 1.5 }}>
+              <div><strong>Protagonist:</strong> {script.persona.age_range} {script.persona.ethnicity} {script.persona.gender}, {script.persona.body_type}, {script.persona.hair}</div>
+              <div><strong>Wardrobe:</strong> {script.persona.wardrobe}</div>
+              <div><strong>Vibe:</strong> {script.persona.vibe}</div>
+              <div><strong>Setting:</strong> {script.persona.setting}</div>
+              <div><strong>Lighting:</strong> {script.persona.lighting}</div>
+              <div><strong>Camera:</strong> {script.persona.camera_style}</div>
+            </div>
+          </details>
+        )}
         {hasKeyframes && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
             {keyframes.map((kf) => (
@@ -1042,6 +1130,29 @@ function KeyframeTile({
       )}
       {kf.error && (
         <p style={{ color: "#ff6b6b", fontSize: 9, marginTop: 4 }}>{kf.error}</p>
+      )}
+      {kf.image_prompt && (
+        <details style={{ marginTop: 4, fontSize: 9 }}>
+          <summary style={{ cursor: "pointer", color: "var(--muted-2)" }}>view prompt</summary>
+          <pre
+            style={{
+              marginTop: 4,
+              padding: 6,
+              background: "var(--surface-2)",
+              borderRadius: 4,
+              fontSize: 9,
+              lineHeight: 1.3,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              maxHeight: 240,
+              overflowY: "auto",
+              fontFamily: "var(--font-mono, ui-monospace, monospace)",
+              color: "var(--text-2)",
+            }}
+          >
+            {kf.image_prompt}
+          </pre>
+        </details>
       )}
     </div>
   );
