@@ -35,6 +35,11 @@ export type GenerateImageOptions = {
   quality?: "low" | "medium" | "high";   // gpt-image-1 standard tiers
   // Storage hint — where in R2 to put the resulting PNG.
   prefix: string;                         // e.g. `scripts/<script_id>`
+  // When present, switches to /images/edits so the model COMPOSES around
+  // the given reference instead of inventing a product from scratch.
+  // Use the product hero image here — the bottle/label/packaging in the
+  // output will then match the real product exactly.
+  reference_image_url?: string | null;
 };
 
 export type GenerateImageResult = PutResult & {
@@ -55,7 +60,25 @@ export async function generateAdImage(opts: GenerateImageOptions): Promise<Gener
   const size = SIZE_FOR_ASPECT[aspect];
   const quality = opts.quality ?? "medium";
 
-  // gpt-image-1 returns b64_json by default; explicit for safety.
+  // Reference-image path: keeps the real product visible in the output.
+  // gpt-image-1's /images/edits accepts multipart with an `image` file +
+  // a `prompt` that describes the new scene around it.
+  if (opts.reference_image_url) {
+    try {
+      return await editFromReference({
+        key, model, prompt: opts.prompt, size, quality,
+        prefix: opts.prefix,
+        reference_image_url: opts.reference_image_url,
+      });
+    } catch (err: any) {
+      // If the edits endpoint rejects (e.g. unsupported model variant),
+      // fall back to text-only generation so we still produce SOMETHING
+      // rather than failing the whole post.
+      console.warn(`[openai-images] edits path failed, falling back to generations: ${err?.message ?? err}`);
+    }
+  }
+
+  // Text-only generation fallback.
   const res = await fetch(`${OPENAI_BASE}/images/generations`, {
     method: "POST",
     headers: {
@@ -126,6 +149,84 @@ export async function generateAdImage(opts: GenerateImageOptions): Promise<Gener
 // Source: platform.openai.com/docs/guides/images-vision/pricing
 function estimateCost(quality: "low" | "medium" | "high", _size: ImageSize): number {
   return { low: 0.011, medium: 0.042, high: 0.167 }[quality];
+}
+
+// Reference-image edit path. Downloads the product hero, hands it to
+// /v1/images/edits along with the prompt, and stores the result the same
+// way as the generations path so callers don't care which one ran.
+async function editFromReference(opts: {
+  key: string;
+  model: string;
+  prompt: string;
+  size: ImageSize;
+  quality: "low" | "medium" | "high";
+  prefix: string;
+  reference_image_url: string;
+}): Promise<GenerateImageResult> {
+  const absUrl = absolutizeAssetUrl(opts.reference_image_url);
+  const refRes = await fetch(absUrl);
+  if (!refRes.ok) throw new Error(`reference image fetch ${refRes.status} from ${absUrl}`);
+  const refBuf = Buffer.from(await refRes.arrayBuffer());
+  const refMime = (refRes.headers.get("content-type") || "image/png").split(";")[0].trim();
+  const refExt = refMime === "image/jpeg" ? "jpg" : refMime === "image/webp" ? "webp" : "png";
+
+  const fd = new FormData();
+  fd.append("model", opts.model);
+  fd.append("prompt", opts.prompt);
+  fd.append("size", opts.size);
+  fd.append("n", "1");
+  fd.append("quality", opts.quality);
+  fd.append("image", new Blob([refBuf], { type: refMime }), `product.${refExt}`);
+
+  const res = await fetch(`${OPENAI_BASE}/images/edits`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${opts.key}` },
+    body: fd as any,
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`OpenAI edit ${res.status}: ${t.slice(0, 400)}`);
+  }
+  const data = await res.json();
+  const b64: string | undefined = data?.data?.[0]?.b64_json;
+  if (!b64) {
+    const url: string | undefined = data?.data?.[0]?.url;
+    if (!url) throw new Error("OpenAI edit: response had no b64_json or url");
+    const dl = await fetch(url);
+    if (!dl.ok) throw new Error(`OpenAI edit download ${dl.status}`);
+    const ab = await dl.arrayBuffer();
+    const stored = await putAsset({
+      prefix: opts.prefix,
+      ext: "png",
+      body: Buffer.from(ab),
+      contentType: dl.headers.get("content-type") ?? "image/png",
+    });
+    bump("frame_image");
+    return { ...stored, model: opts.model, size: opts.size, prompt: opts.prompt, cost_estimate_usd: estimateCost(opts.quality, opts.size) };
+  }
+  const buf = Buffer.from(b64, "base64");
+  const stored = await putAsset({
+    prefix: opts.prefix,
+    ext: "png",
+    body: buf,
+    contentType: "image/png",
+  });
+  bump("frame_image");
+  return {
+    ...stored,
+    model: opts.model,
+    size: opts.size,
+    prompt: opts.prompt,
+    cost_estimate_usd: estimateCost(opts.quality, opts.size),
+  };
+}
+
+// /api/assets/... is relative — OpenAI needs an absolute URL. Use
+// PUBLIC_BASE_URL on Railway; else assume localhost for dev.
+function absolutizeAssetUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = (process.env.PUBLIC_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+  return `${base}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 // Builds an image prompt for a single keyframe of a Meta-script storyboard.
