@@ -445,9 +445,15 @@ function AddProductForm({ onAdded, onError }: { onAdded: (p: Product) => void; o
   const [audiencePrimary, setAudiencePrimary] = useState("");
   const [priceBand, setPriceBand] = useState("");
   const [heroImageUrl, setHeroImageUrl] = useState<string>("");
+  // Additional product shots — packaging back, lifestyle, hand-hold, etc.
+  // The hero is the primary anchor; gallery widens the visual vocabulary
+  // that downstream image / video generators can reference.
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [galleryUploading, setGalleryUploading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
 
   async function pickHero(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -461,6 +467,32 @@ function AddProductForm({ onAdded, onError }: { onAdded: (p: Product) => void; o
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { onError(data?.error ?? "upload failed"); return; }
     setHeroImageUrl(data.url);
+  }
+
+  async function pickGallery(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setGalleryUploading(true);
+    // Upload in parallel — same endpoint as the per-product gallery uploader.
+    const results = await Promise.all(
+      files.map(async (f) => {
+        const fd = new FormData();
+        fd.append("file", f);
+        fd.append("prefix", "products/gallery");
+        const res = await fetch("/api/uploads/image", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { onError(`Couldn't upload ${f.name}: ${data?.error ?? "upload failed"}`); return null; }
+        return data.url as string;
+      })
+    );
+    setGalleryUploading(false);
+    const ok = results.filter((u): u is string => Boolean(u));
+    if (ok.length) setGalleryUrls((prev) => [...prev, ...ok]);
+    if (galleryRef.current) galleryRef.current.value = "";
+  }
+
+  function removeGalleryAt(idx: number) {
+    setGalleryUrls((prev) => prev.filter((_, i) => i !== idx));
   }
 
   async function submit(e: React.FormEvent) {
@@ -479,6 +511,7 @@ function AddProductForm({ onAdded, onError }: { onAdded: (p: Product) => void; o
         audience_primary: audiencePrimary || undefined,
         price_band: priceBand || undefined,
         hero_image_url: heroImageUrl || undefined,
+        gallery_image_urls: galleryUrls.length ? galleryUrls : undefined,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -489,7 +522,9 @@ function AddProductForm({ onAdded, onError }: { onAdded: (p: Product) => void; o
     setName(""); setBrand(""); setOneLiner(""); setPainAnchors("");
     setFormat(""); setKeyIngredients(""); setAudiencePrimary(""); setPriceBand("");
     setHeroImageUrl("");
+    setGalleryUrls([]);
     if (fileRef.current) fileRef.current.value = "";
+    if (galleryRef.current) galleryRef.current.value = "";
   }
 
   return (
@@ -501,39 +536,116 @@ function AddProductForm({ onAdded, onError }: { onAdded: (p: Product) => void; o
       </p>
 
       <form onSubmit={submit} style={{ marginTop: 18 }}>
-        {/* Hero image dropzone */}
+        {/* Hero image dropzone + additional shots strip */}
         <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 18 }}>
-          <div
-            onClick={() => fileRef.current?.click()}
-            style={{
-              aspectRatio: "1/1",
-              border: "1px dashed var(--border-strong)",
-              borderRadius: "var(--radius)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              gap: 6,
-              background: heroImageUrl ? `center/cover url('${heroImageUrl}') no-repeat` : "var(--surface-2)",
-              color: "var(--muted)",
-              overflow: "hidden",
-            }}
-          >
-            {!heroImageUrl && (
-              <>
-                {uploading ? (
-                  <span className="muted-sm">Uploading…</span>
-                ) : (
-                  <>
-                    <Upload size={20} />
-                    <span className="muted-sm">Click to upload hero image</span>
-                    <span className="muted-sm" style={{ fontSize: 11 }}>JPG / PNG / WebP, ≤5 MB</span>
-                  </>
-                )}
-              </>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" onChange={pickHero} style={{ display: "none" }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              onClick={() => fileRef.current?.click()}
+              style={{
+                aspectRatio: "1/1",
+                border: "1px dashed var(--border-strong)",
+                borderRadius: "var(--radius)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                gap: 6,
+                background: heroImageUrl ? `center/cover url('${heroImageUrl}') no-repeat` : "var(--surface-2)",
+                color: "var(--muted)",
+                overflow: "hidden",
+              }}
+            >
+              {!heroImageUrl && (
+                <>
+                  {uploading ? (
+                    <span className="muted-sm">Uploading…</span>
+                  ) : (
+                    <>
+                      <Upload size={20} />
+                      <span className="muted-sm">Click to upload hero image</span>
+                      <span className="muted-sm" style={{ fontSize: 11 }}>JPG / PNG / WebP, ≤5 MB</span>
+                    </>
+                  )}
+                </>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" onChange={pickHero} style={{ display: "none" }} />
+            </div>
+
+            {/* Additional shots — multi-upload */}
+            <div>
+              <div className="muted-sm" style={{ fontSize: 11, marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>More product shots ({galleryUrls.length})</span>
+                {galleryUploading && <span style={{ color: "var(--accent)" }}>Uploading…</span>}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                {galleryUrls.map((url, i) => (
+                  <div
+                    key={url + i}
+                    style={{
+                      position: "relative",
+                      aspectRatio: "1/1",
+                      borderRadius: 6,
+                      overflow: "hidden",
+                      background: `center/cover url('${url}') no-repeat var(--surface-2)`,
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => removeGalleryAt(i)}
+                      title="Remove"
+                      style={{
+                        position: "absolute",
+                        top: 2,
+                        right: 2,
+                        width: 18,
+                        height: 18,
+                        border: "none",
+                        background: "rgba(0,0,0,0.6)",
+                        color: "#fff",
+                        borderRadius: "50%",
+                        padding: 0,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+                <div
+                  onClick={() => galleryRef.current?.click()}
+                  title="Add more product images"
+                  style={{
+                    aspectRatio: "1/1",
+                    border: "1px dashed var(--border-strong)",
+                    borderRadius: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: "var(--muted)",
+                    background: "var(--surface-2)",
+                  }}
+                >
+                  <Plus size={16} />
+                </div>
+              </div>
+              <input
+                ref={galleryRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={pickGallery}
+                style={{ display: "none" }}
+              />
+              <p className="muted-sm" style={{ fontSize: 10, marginTop: 6, lineHeight: 1.4 }}>
+                Packaging back, lifestyle, hand-hold, ingredient shots — anything that widens the visual vocabulary for downstream generators. Multi-select supported.
+              </p>
+            </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

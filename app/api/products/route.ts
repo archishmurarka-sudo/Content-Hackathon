@@ -42,6 +42,9 @@ export async function POST(req: NextRequest) {
     one_liner: String(body.one_liner ?? "").trim(),
     pain_anchors: Array.isArray(body.pain_anchors) ? body.pain_anchors.map((x: any) => String(x).trim()).filter(Boolean) : [],
     hero_image_url: typeof body.hero_image_url === "string" ? body.hero_image_url : null,
+    gallery_image_urls: Array.isArray(body.gallery_image_urls)
+      ? body.gallery_image_urls.map((u: any) => String(u)).filter((u: string) => /^https?:\/\/|^\/api\/assets\//.test(u))
+      : null,
     format: typeof body.format === "string" ? body.format : undefined,
     key_ingredients: Array.isArray(body.key_ingredients) ? body.key_ingredients.map((x: any) => String(x).trim()).filter(Boolean) : undefined,
     delivery_tech: typeof body.delivery_tech === "string" ? body.delivery_tech : undefined,
