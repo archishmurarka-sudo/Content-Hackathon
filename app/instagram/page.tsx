@@ -6,6 +6,8 @@ import Link from "next/link";
 // is the closest neutral substitute that fits the social-photo metaphor.
 import { Camera as Instagram, Sparkles, Trash2, Copy } from "lucide-react";
 import { useToast } from "@/components/toast";
+import { BrandContextPanel } from "@/components/brand-context-panel";
+import type { BrandContext } from "@/lib/brand-context";
 
 type Product = { id: string; name: string; brand: string; one_liner?: string };
 type IgFormat = "feed_1x1" | "feed_4x5" | "reels_9x16";
@@ -63,6 +65,23 @@ export default function InstagramPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Brand-context slot — fed by /api/brand-context which the other chat
+  // is wiring to the Connoisseur MCP. Until that lands the endpoint
+  // returns `available: false` and the panel renders an empty state.
+  const [brandCtx, setBrandCtx] = useState<BrandContext | null>(null);
+  const [brandCtxLoading, setBrandCtxLoading] = useState(false);
+  const [useBrandIntel, setUseBrandIntel] = useState(true);
+
+  useEffect(() => {
+    if (!productId) return;
+    setBrandCtxLoading(true);
+    fetch(`/api/brand-context?product_id=${encodeURIComponent(productId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setBrandCtx(d ?? null))
+      .catch(() => setBrandCtx(null))
+      .finally(() => setBrandCtxLoading(false));
+  }, [productId]);
+
   async function refresh() {
     const [igRes, pRes] = await Promise.all([
       fetch("/api/instagram", { cache: "no-store" }),
@@ -89,7 +108,7 @@ export default function InstagramPage() {
     const res = await fetch("/api/instagram", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: productId, format, theme, vibe }),
+      body: JSON.stringify({ product_id: productId, format, theme, vibe, use_brand_context: useBrandIntel }),
     });
     setGenerating(false);
     const data = await res.json().catch(() => ({}));
@@ -203,8 +222,35 @@ export default function InstagramPage() {
             </p>
           </div>
 
+          <label
+            style={{
+              marginTop: 14,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              color: "var(--text, #222)",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={useBrandIntel}
+              onChange={(e) => setUseBrandIntel(e.target.checked)}
+            />
+            Use brand intelligence
+            <span className="muted-sm" style={{ fontSize: 11 }}>
+              · pull winning selling points + voice atoms from Connoisseur when available
+            </span>
+          </label>
+
           {error && <p style={{ color: "var(--danger, #d33)", marginTop: 12, fontSize: 13 }}>{error}</p>}
         </form>
+      </div>
+
+      <div style={{ marginBottom: 28 }}>
+        <BrandContextPanel ctx={brandCtx} loading={brandCtxLoading} />
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
