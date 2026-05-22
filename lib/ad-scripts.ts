@@ -5,6 +5,7 @@ import { hasDb, sql, ensureSchema } from "./db";
 import type { GeneratedScript, CsvRow } from "./script-generator";
 
 export type ImageStatus = "idle" | "pending" | "ready" | "failed";
+export type VideoStatus = "idle" | "pending" | "ready" | "failed";
 
 export type AdScript = {
   id: string;
@@ -22,6 +23,13 @@ export type AdScript = {
   image_key?: string | null;
   image_prompt?: string | null;
   image_error?: string | null;
+  // Ad video (one per script, generated via Gemini Veo 3.1 Fast, image-to-video).
+  video_status?: VideoStatus;
+  video_url?: string | null;
+  video_key?: string | null;
+  video_prompt?: string | null;
+  video_model?: string | null;
+  video_error?: string | null;
   created_at: number;
 };
 
@@ -149,6 +157,39 @@ export async function setScriptImage(
   return cur;
 }
 
+export async function setScriptVideo(
+  id: string,
+  patch: {
+    video_status?: VideoStatus;
+    video_url?: string | null;
+    video_key?: string | null;
+    video_prompt?: string | null;
+    video_model?: string | null;
+    video_error?: string | null;
+  }
+): Promise<AdScript | undefined> {
+  if (hasDb()) {
+    await ensureSchema();
+    const s = sql();
+    await s`
+      UPDATE ad_scripts SET
+        video_status = COALESCE(${patch.video_status ?? null}, video_status),
+        video_url    = ${patch.video_url ?? null},
+        video_key    = ${patch.video_key ?? null},
+        video_prompt = ${patch.video_prompt ?? null},
+        video_model  = ${patch.video_model ?? null},
+        video_error  = ${patch.video_error ?? null}
+      WHERE id = ${id}
+    `;
+    return getScript(id);
+  }
+  const cur = mem.get(id);
+  if (!cur) return undefined;
+  Object.assign(cur, patch);
+  mem.set(id, cur);
+  return cur;
+}
+
 function rowToScript(r: any): AdScript {
   return {
     id: r.id,
@@ -165,6 +206,12 @@ function rowToScript(r: any): AdScript {
     image_key: r.image_key ?? null,
     image_prompt: r.image_prompt ?? null,
     image_error: r.image_error ?? null,
+    video_status: (r.video_status as VideoStatus | null) ?? "idle",
+    video_url: r.video_url ?? null,
+    video_key: r.video_key ?? null,
+    video_prompt: r.video_prompt ?? null,
+    video_model: r.video_model ?? null,
+    video_error: r.video_error ?? null,
     created_at: Number(r.created_at),
   };
 }

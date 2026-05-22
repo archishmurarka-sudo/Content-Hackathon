@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Instagram, Sparkles, Trash2, Copy } from "lucide-react";
+// lucide-react doesn't export an `Instagram` glyph in this version; Camera
+// is the closest neutral substitute that fits the social-photo metaphor.
+import { Camera as Instagram, Sparkles, Trash2, Copy } from "lucide-react";
 import { useToast } from "@/components/toast";
 
 type Product = { id: string; name: string; brand: string; one_liner?: string };

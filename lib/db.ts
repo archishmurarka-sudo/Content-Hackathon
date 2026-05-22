@@ -128,6 +128,13 @@ export async function ensureSchema(): Promise<void> {
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_key TEXT;`;
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_prompt TEXT;`;
     await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS image_error TEXT;`;
+    // Veo video columns (image-to-video via Gemini Veo 3.1 Fast).
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_status TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_url TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_key TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_prompt TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_model TEXT;`;
+    await s`ALTER TABLE ad_scripts ADD COLUMN IF NOT EXISTS video_error TEXT;`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_product_idx ON ad_scripts (product_id, created_at DESC);`;
     await s`CREATE INDEX IF NOT EXISTS ad_scripts_batch_idx ON ad_scripts (batch_id);`;
 

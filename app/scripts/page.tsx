@@ -44,6 +44,10 @@ type AdScript = {
   image_url?: string | null;
   image_prompt?: string | null;
   image_error?: string | null;
+  video_status?: "idle" | "pending" | "ready" | "failed";
+  video_url?: string | null;
+  video_model?: string | null;
+  video_error?: string | null;
   created_at: number;
 };
 
@@ -75,6 +79,8 @@ export default function ScriptsPage() {
   const [generating, setGenerating] = useState(false);
   const [batchImaging, setBatchImaging] = useState(false);
   const [perScriptImaging, setPerScriptImaging] = useState<Record<string, boolean>>({});
+  const [batchVideoing, setBatchVideoing] = useState(false);
+  const [perScriptVideoing, setPerScriptVideoing] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch("/api/products", { cache: "no-store" })
@@ -168,9 +174,9 @@ export default function ScriptsPage() {
     window.location.href = url;
   }
 
-  // While any image is pending, poll every 4s so the UI catches up.
+  // While any image OR video is pending, poll every 4s so the UI catches up.
   useEffect(() => {
-    const pending = scripts.some((s) => s.image_status === "pending");
+    const pending = scripts.some((s) => s.image_status === "pending" || s.video_status === "pending");
     if (!pending) return;
     const t = setInterval(() => {
       refreshScripts();
@@ -196,6 +202,55 @@ export default function ScriptsPage() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast.error("Image generation failed", data?.error ?? `HTTP ${res.status}`);
+    }
+    refreshScripts();
+  }
+
+  async function generateOneVideo(id: string) {
+    setPerScriptVideoing((m) => ({ ...m, [id]: true }));
+    setScripts((prev) => prev.map((s) => (s.id === id ? { ...s, video_status: "pending", video_error: null } : s)));
+    const res = await fetch(`/api/scripts/${encodeURIComponent(id)}/video`, { method: "POST" });
+    setPerScriptVideoing((m) => ({ ...m, [id]: false }));
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error("Video generation failed", data?.error ?? `HTTP ${res.status}`);
+    }
+    refreshScripts();
+  }
+
+  async function generateAllVideos(onlyApproved: boolean) {
+    if (!selectedProductId) return;
+    const eligible = scripts.filter(
+      (s) =>
+        (!onlyApproved || s.approved) &&
+        s.image_status === "ready" &&
+        s.video_status !== "ready" &&
+        s.video_status !== "pending"
+    );
+    if (eligible.length === 0) {
+      toast.error("Nothing to generate", "Eligible scripts need a ready image and no existing video. Generate images first.");
+      return;
+    }
+    // Veo 3.1 Fast ~$0.10/sec × 8s = $0.80 per clip.
+    const cost = (eligible.length * 0.8).toFixed(2);
+    if (!confirm(`Generate ${eligible.length} video${eligible.length === 1 ? "" : "s"} via Gemini Veo 3.1 Fast (~$${cost}, audio on, 8s each)?`)) return;
+    setBatchVideoing(true);
+    setScripts((prev) =>
+      prev.map((s) =>
+        eligible.find((e) => e.id === s.id) ? { ...s, video_status: "pending", video_error: null } : s
+      )
+    );
+    const res = await fetch("/api/scripts/batch-videos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: selectedProductId, only_approved: onlyApproved }),
+    });
+    setBatchVideoing(false);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error("Batch video generation failed", data?.error ?? `HTTP ${res.status}`);
+    } else {
+      toast.success(`Generated ${data?.succeeded ?? 0} videos`, data?.failed ? `${data.failed} failed` : "All done");
     }
     refreshScripts();
   }
@@ -473,6 +528,14 @@ export default function ScriptsPage() {
                   >
                     {batchImaging ? "Generating images…" : "✨ Generate images"}
                   </button>
+                  <button
+                    className="btn-magenta"
+                    onClick={() => generateAllVideos(false)}
+                    disabled={batchVideoing}
+                    title="Generate 8s ad videos via Gemini Veo 3.1 Fast (image-to-video, audio on). Requires ready images first."
+                  >
+                    {batchVideoing ? "Generating videos…" : "🎬 Generate videos"}
+                  </button>
                   <button className="btn-ghost btn-sm" onClick={() => downloadCsv(true)} title="Approved scripts only">
                     ↓ Approved CSV
                   </button>
@@ -496,7 +559,9 @@ export default function ScriptsPage() {
                     onToggle={() => toggleApprove(s.id, !s.approved)}
                     onDelete={() => removeScript(s.id)}
                     onGenerateImage={() => generateOneImage(s.id)}
+                    onGenerateVideo={() => generateOneVideo(s.id)}
                     imagingBusy={Boolean(perScriptImaging[s.id])}
+                    videoingBusy={Boolean(perScriptVideoing[s.id])}
                   />
                 ))}
               </div>
@@ -540,98 +605,197 @@ function ScriptCard({
   onToggle,
   onDelete,
   onGenerateImage,
+  onGenerateVideo,
   imagingBusy,
+  videoingBusy,
 }: {
   index: number;
   script: AdScript;
   onToggle: () => void;
   onDelete: () => void;
   onGenerateImage: () => void;
+  onGenerateVideo: () => void;
   imagingBusy: boolean;
+  videoingBusy: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const csv = script.script_csv ?? {};
   const imgStatus = script.image_status ?? "idle";
+  const vidStatus = script.video_status ?? "idle";
   const isPortrait = script.placement !== "feed";
   const imgAspect = isPortrait ? "9/16" : "1/1";
   const imageDownloadName = `script_${String(index).padStart(2, "0")}.png`;
+  const videoDownloadName = `script_${String(index).padStart(2, "0")}.mp4`;
 
   return (
     <div className="card" style={{ padding: 14, borderColor: script.approved ? "var(--accent)" : "var(--border)", background: script.approved ? "var(--accent-soft)" : undefined }}>
-      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 14 }}>
-        {/* Image slot */}
-        <div style={{ width: 180 }}>
-          <div
-            style={{
-              width: "100%",
-              aspectRatio: imgAspect,
-              borderRadius: 8,
-              background: "#000",
-              overflow: "hidden",
-              border: "1px solid var(--border)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-            }}
-          >
-            {script.image_url ? (
-              <img
-                src={script.image_url}
-                alt={`Ad image for script ${index}`}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            ) : (
-              <span className="muted-sm" style={{ fontSize: 11, textAlign: "center", padding: 8 }}>
-                {imgStatus === "pending" ? "Generating…" : imgStatus === "failed" ? "Failed" : "No image yet"}
-              </span>
-            )}
-            {imgStatus === "pending" && (
-              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>
-                Generating…
-              </div>
-            )}
-          </div>
-          <div className="row" style={{ marginTop: 6, gap: 4, flexWrap: "wrap" }}>
-            <button
-              className="btn-ghost btn-sm"
-              onClick={onGenerateImage}
-              disabled={imagingBusy || imgStatus === "pending"}
-              style={{ fontSize: 11, flex: 1 }}
-              title={script.image_url ? "Regenerate image" : "Generate image"}
+      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 14 }}>
+        {/* Asset stack — image on top, video below */}
+        <div style={{ width: 200, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Image slot */}
+          <div>
+            <div
+              style={{
+                width: "100%",
+                aspectRatio: imgAspect,
+                borderRadius: 8,
+                background: "#000",
+                overflow: "hidden",
+                border: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+              }}
             >
-              {imagingBusy || imgStatus === "pending"
-                ? "…"
-                : script.image_url
-                  ? "↻ Regen"
-                  : imgStatus === "failed"
-                    ? "Retry"
-                    : "✨ Image"}
-            </button>
-            {script.image_url && (
-              <a
-                href={`${script.image_url}${script.image_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(imageDownloadName)}`}
-                download={imageDownloadName}
-                style={{
-                  flex: 1,
-                  textAlign: "center",
-                  padding: "4px 8px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: "var(--accent-soft)",
-                  color: "var(--accent)",
-                  border: "1px solid var(--accent)",
-                  borderRadius: 4,
-                  textDecoration: "none",
-                }}
+              {script.image_url ? (
+                <img
+                  src={script.image_url}
+                  alt={`Ad image for script ${index}`}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                <span className="muted-sm" style={{ fontSize: 11, textAlign: "center", padding: 8 }}>
+                  {imgStatus === "pending" ? "Generating…" : imgStatus === "failed" ? "Failed" : "No image yet"}
+                </span>
+              )}
+              {imgStatus === "pending" && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>
+                  Generating…
+                </div>
+              )}
+            </div>
+            <div className="row" style={{ marginTop: 6, gap: 4, flexWrap: "wrap" }}>
+              <button
+                className="btn-ghost btn-sm"
+                onClick={onGenerateImage}
+                disabled={imagingBusy || imgStatus === "pending"}
+                style={{ fontSize: 11, flex: 1 }}
+                title={script.image_url ? "Regenerate image" : "Generate image"}
               >
-                ↓ PNG
-              </a>
+                {imagingBusy || imgStatus === "pending"
+                  ? "…"
+                  : script.image_url
+                    ? "↻ Image"
+                    : imgStatus === "failed"
+                      ? "Retry image"
+                      : "✨ Image"}
+              </button>
+              {script.image_url && (
+                <a
+                  href={`${script.image_url}${script.image_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(imageDownloadName)}`}
+                  download={imageDownloadName}
+                  style={{
+                    flex: 1,
+                    textAlign: "center",
+                    padding: "4px 8px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: "var(--accent-soft)",
+                    color: "var(--accent)",
+                    border: "1px solid var(--accent)",
+                    borderRadius: 4,
+                    textDecoration: "none",
+                  }}
+                >
+                  ↓ PNG
+                </a>
+              )}
+            </div>
+            {script.image_error && (
+              <p style={{ color: "#ff6b6b", fontSize: 10, marginTop: 4 }}>{script.image_error}</p>
             )}
           </div>
-          {script.image_error && (
-            <p style={{ color: "#ff6b6b", fontSize: 10, marginTop: 4 }}>{script.image_error}</p>
-          )}
+
+          {/* Video slot */}
+          <div>
+            <div
+              style={{
+                width: "100%",
+                aspectRatio: imgAspect,
+                borderRadius: 8,
+                background: "#000",
+                overflow: "hidden",
+                border: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+              }}
+            >
+              {script.video_url ? (
+                <video
+                  src={script.video_url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+                />
+              ) : script.image_url ? (
+                <img
+                  src={script.image_url}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.35 }}
+                />
+              ) : (
+                <span className="muted-sm" style={{ fontSize: 11, textAlign: "center", padding: 8 }}>
+                  No video yet
+                </span>
+              )}
+              {vidStatus === "pending" && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, flexDirection: "column", gap: 4 }}>
+                  <span>Rendering…</span>
+                  <span style={{ fontSize: 9, opacity: 0.7 }}>Veo 3.1 Fast · ~2-4 min</span>
+                </div>
+              )}
+            </div>
+            <div className="row" style={{ marginTop: 6, gap: 4, flexWrap: "wrap" }}>
+              <button
+                className="btn-ghost btn-sm"
+                onClick={onGenerateVideo}
+                disabled={videoingBusy || vidStatus === "pending" || !script.image_url}
+                style={{ fontSize: 11, flex: 1 }}
+                title={
+                  !script.image_url
+                    ? "Generate the image first — Veo uses it as the first frame"
+                    : script.video_url
+                      ? "Regenerate video"
+                      : "Generate video"
+                }
+              >
+                {videoingBusy || vidStatus === "pending"
+                  ? "…"
+                  : script.video_url
+                    ? "↻ Video"
+                    : vidStatus === "failed"
+                      ? "Retry video"
+                      : "🎬 Video"}
+              </button>
+              {script.video_url && (
+                <a
+                  href={`${script.video_url}${script.video_url.includes("?") ? "&" : "?"}download=${encodeURIComponent(videoDownloadName)}`}
+                  download={videoDownloadName}
+                  style={{
+                    flex: 1,
+                    textAlign: "center",
+                    padding: "4px 8px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: "var(--magenta-soft)",
+                    color: "var(--magenta)",
+                    border: "1px solid var(--magenta)",
+                    borderRadius: 4,
+                    textDecoration: "none",
+                  }}
+                >
+                  ↓ MP4
+                </a>
+              )}
+            </div>
+            {script.video_error && (
+              <p style={{ color: "#ff6b6b", fontSize: 10, marginTop: 4 }}>{script.video_error}</p>
+            )}
+          </div>
         </div>
 
         {/* Script body */}
