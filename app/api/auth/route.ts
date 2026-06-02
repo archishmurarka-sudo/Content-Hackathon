@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   authCookieName,
   authCookieOptions,
+  clearRateLimit,
   dashboardPasswordHash,
   rateLimitOk,
   verifyPassword,
@@ -18,12 +19,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function clientIp(req: NextRequest): string {
-  // Behind Railway's proxy the real IP arrives in x-forwarded-for. Pick the
-  // first hop; the rest are proxy chain. Falls back to a constant key so a
-  // request with no header still gets bucketed (and rate-limited) somewhere.
+  // Prefer x-real-ip (Railway/most CDNs set this to the actual remote
+  // client). Fall back to the RIGHT-most x-forwarded-for entry — that's
+  // the one set by your trusted proxy. Reading the LEFT-most XFF (as the
+  // old code did) lets an attacker spoof their own rate-limit bucket
+  // simply by sending a fake XFF header.
+  const real = req.headers.get("x-real-ip");
+  if (real && real.trim()) return real.trim();
   const fwd = req.headers.get("x-forwarded-for") ?? "";
-  const first = fwd.split(",")[0]?.trim();
-  return first || req.headers.get("x-real-ip") || "unknown";
+  const hops = fwd.split(",").map((h) => h.trim()).filter(Boolean);
+  if (hops.length > 0) return hops[hops.length - 1];
+  return "unknown";
 }
 
 export async function POST(req: NextRequest) {
@@ -45,6 +51,10 @@ export async function POST(req: NextRequest) {
     console.warn(`[auth] failed login from ${ip}`);
     return NextResponse.json({ ok: false, error: "wrong password" }, { status: 401 });
   }
+
+  // Clear the IP's rate-limit bucket — operator probably typo'd before
+  // landing on the right password; no reason to carry penalty count forward.
+  clearRateLimit(ip);
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(authCookieName(), dashboardPasswordHash(), authCookieOptions());
